@@ -11,14 +11,6 @@ import {
   generateFollowUpQuestions,
   validateSolutionAgainstOld
 } from "./ollamaClient.js";
-
-/**
- * Processes user messages based on message type and flow state
- * @param {string} session_id - Session ID
- * @param {string} user_message - User's message content
- * @param {string} message_type - Type of message: "problem_description" | "solution" | "follow_up_answer"
- * @returns {Promise<{response_text: string, next_action: string, follow_up_questions?: string[], session_updated: boolean}>}
- */
 /**
  * Processes user messages based on message type and conversation flow state
  * Implements complete chat flow logic with different behaviors per phase
