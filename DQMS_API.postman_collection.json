@@ -24,258 +24,408 @@
       "response": []
     },
     {
-      "name": "Chat - Start Session",
-      "event": [
+      "name": "Chat",
+      "item": [
         {
-          "listen": "test",
-          "script": {
-            "exec": [
-              "if (pm.response.code === 200) {",
-              "    var jsonData = pm.response.json();",
-              "    pm.environment.set('session_id', jsonData.session_id);",
-              "    pm.environment.set('problem_id', jsonData.problem_id);",
-              "    console.log('Session ID saved:', jsonData.session_id);",
-              "    console.log('Problem ID saved:', jsonData.problem_id);",
-              "}"
-            ]
-          }
-        }
-      ],
-      "request": {
-        "method": "POST",
-        "header": [
-          {
-            "key": "Content-Type",
-            "value": "application/json"
-          }
-        ],
-        "body": {
-          "mode": "raw",
-          "raw": "{\n  \"user_id\": \"user123\",\n  \"problem_description\": \"Database connection is timing out when running complex queries. The application hangs after 30 seconds of execution. This happens particularly with queries involving multiple joins across large tables with millions of records.\"\n}"
-        },
-        "url": {
-          "raw": "{{base_url}}/api/chat/start",
-          "host": [
-            "{{base_url}}"
+          "name": "Chat - Start Session",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.environment.set('session_id', jsonData.session_id);",
+                  "    pm.environment.set('problem_id', jsonData.problem_id);",
+                  "    console.log('Session ID saved:', jsonData.session_id);",
+                  "    console.log('Problem ID saved:', jsonData.problem_id);",
+                  "}"
+                ]
+              }
+            }
           ],
-          "path": [
-            "api",
-            "chat",
-            "start"
-          ]
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"user_id\": \"user123\",\n  \"problem_description\": \"Database connection is timing out when running complex queries. The application hangs after 30 seconds of execution. This happens particularly with queries involving multiple joins across large tables with millions of records.\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/chat/start",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "chat",
+                "start"
+              ]
+            },
+            "description": "Initiates a new chat session for a problem. Returns session_id, problem_id and initial AI response."
+          },
+          "response": []
         },
-        "description": "Initiates a new chat session for a problem. Returns session_id and initial AI response."
-      },
-      "response": []
+        {
+          "name": "Chat - Send User Solution",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "exec": [
+                  "if (!pm.environment.get('session_id')) {",
+                  "    console.warn('No session_id found. Run \"Chat - Start Session\" first.');",
+                  "}",
+                  "if (!pm.environment.get('problem_id')) {",
+                  "    console.warn('No problem_id found. Run \"Chat - Start Session\" first.');",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"session_id\": \"{{session_id}}\",\n  \"user_message\": \"We optimized the queries by adding proper indexes on the join columns and breaking down the complex query into smaller, more efficient queries. We also implemented query caching for frequently accessed data.\",\n  \"message_type\": \"user_solution\",\n  \"problem_id\": \"{{problem_id}}\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/chat/message",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "chat",
+                "message"
+              ]
+            },
+            "description": "Sends a user's solution for analysis. Message type should be 'user_solution'."
+          },
+          "response": []
+        },
+        {
+          "name": "Chat - Send Follow-up Response",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "exec": [
+                  "if (!pm.environment.get('session_id')) {",
+                  "    console.warn('No session_id found. Run \"Chat - Start Session\" first.');",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"session_id\": \"{{session_id}}\",\n  \"user_message\": \"We implemented connection pooling with a maximum of 50 connections and set the timeout to 60 seconds instead of 30. We also added retry logic with exponential backoff.\",\n  \"message_type\": \"response\",\n  \"problem_id\": \"{{problem_id}}\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/chat/message",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "chat",
+                "message"
+              ]
+            },
+            "description": "Sends a response to follow-up questions. Message type should be 'response'."
+          },
+          "response": []
+        }
+      ]
     },
     {
-      "name": "Chat - Send User Solution",
-      "event": [
+      "name": "Structure",
+      "item": [
         {
-          "listen": "prerequest",
-          "script": {
-            "exec": [
-              "// Ensure we have a session_id from previous request",
-              "if (!pm.environment.get('session_id')) {",
-              "    console.warn('No session_id found. Run \"Chat - Start Session\" first.');",
-              "}"
-            ]
-          }
+          "name": "Structure - Problem",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"problemDesc\": \"Database connection is timing out when running complex queries. The application hangs after 30 seconds of execution. This happens particularly with queries involving multiple joins across large tables with millions of records.\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/structure/problem",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "structure",
+                "problem"
+              ]
+            },
+            "description": "Structures a problem description into a standardized format. Returns structured_problem."
+          },
+          "response": []
+        },
+        {
+          "name": "Structure - Solution",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"solutionDesc\": \"We optimized the database queries by adding indexes on join columns, breaking down complex queries into smaller ones, implementing query caching, setting up connection pooling with 50 max connections, and increasing timeout to 60 seconds with retry logic.\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/structure/solution",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "structure",
+                "solution"
+              ]
+            },
+            "description": "Structures a solution description into a standardized format. Returns structured_solution."
+          },
+          "response": []
         }
-      ],
-      "request": {
-        "method": "POST",
-        "header": [
-          {
-            "key": "Content-Type",
-            "value": "application/json"
-          }
-        ],
-        "body": {
-          "mode": "raw",
-          "raw": "{\n  \"session_id\": \"{{session_id}}\",\n  \"user_message\": \"We optimized the queries by adding proper indexes on the join columns and breaking down the complex query into smaller, more efficient queries. We also implemented query caching for frequently accessed data.\",\n  \"message_type\": \"user_solution\"\n}"
-        },
-        "url": {
-          "raw": "{{base_url}}/api/chat/message",
-          "host": [
-            "{{base_url}}"
-          ],
-          "path": [
-            "api",
-            "chat",
-            "message"
-          ]
-        },
-        "description": "Sends a user's solution for analysis. Message type should be 'user_solution'."
-      },
-      "response": []
+      ]
     },
     {
-      "name": "Chat - Send Follow-up Response",
-      "event": [
+      "name": "Solutions",
+      "item": [
         {
-          "listen": "prerequest",
-          "script": {
-            "exec": [
-              "if (!pm.environment.get('session_id')) {",
-              "    console.warn('No session_id found. Run \"Chat - Start Session\" first.');",
-              "}"
-            ]
-          }
-        }
-      ],
-      "request": {
-        "method": "POST",
-        "header": [
-          {
-            "key": "Content-Type",
-            "value": "application/json"
-          }
-        ],
-        "body": {
-          "mode": "raw",
-          "raw": "{\n  \"session_id\": \"{{session_id}}\",\n  \"user_message\": \"We implemented connection pooling with a maximum of 50 connections and set the timeout to 60 seconds instead of 30. We also added retry logic with exponential backoff.\",\n  \"message_type\": \"response\"\n}"
+          "name": "Solutions - Validate",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"strProblem\": {\n    \"title\": \"Database Timeout Issue\",\n    \"description\": \"Database connection is timing out when running complex queries\",\n    \"category\": \"database\"\n  },\n  \"strSolution\": {\n    \"approach\": \"Query optimization and connection pooling\",\n    \"solution_steps\": [\n      \"Add database indexes on join columns\",\n      \"Implement query caching\",\n      \"Set up connection pooling with max 50 connections\",\n      \"Increase timeout to 60 seconds\"\n    ],\n    \"claimed_outcomes\": [\n      \"Improved query performance\",\n      \"Reduced timeouts\"\n    ]\n  }\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/solutions/validate",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "solutions",
+                "validate"
+              ]
+            },
+            "description": "Validates a solution against the problem. Uses evaluateSolution (no clarifyingNotes) or reEvaluateSolution (with clarifyingNotes). Returns evaluation_result."
+          },
+          "response": []
         },
-        "url": {
-          "raw": "{{base_url}}/api/chat/message",
-          "host": [
-            "{{base_url}}"
+        {
+          "name": "Solutions - Validate with Clarifying Notes",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"strProblem\": {\n    \"title\": \"Database Timeout Issue\",\n    \"description\": \"Database connection is timing out when running complex queries\",\n    \"category\": \"database\"\n  },\n  \"strSolution\": {\n    \"approach\": \"Query optimization and connection pooling\",\n    \"solution_steps\": [\n      \"Add database indexes on join columns\",\n      \"Implement query caching\",\n      \"Set up connection pooling with max 50 connections\",\n      \"Increase timeout to 60 seconds\"\n    ],\n    \"claimed_outcomes\": [\n      \"Improved query performance\",\n      \"Reduced timeouts\"\n    ]\n  },\n  \"clarifyingNotes\": \"The team also implemented exponential backoff retry logic and monitored query performance before and after changes.\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/solutions/validate",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "solutions",
+                "validate"
+              ]
+            },
+            "description": "Re-validates a solution with additional clarifying notes. Returns updated evaluation_result."
+          },
+          "response": []
+        },
+        {
+          "name": "Solutions - Generate Notes",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"questionsArray\": [\n    \"Did you add database indexes?\",\n    \"What timeout value did you set?\",\n    \"Did you implement retry logic?\"\n  ],\n  \"answersArray\": [\n    \"Yes, we added indexes on all join columns\",\n    \"We increased it from 30 seconds to 60 seconds\",\n    \"Yes, we added exponential backoff retry logic\"\n  ]\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/generate/notes",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "generate",
+                "notes"
+              ]
+            },
+            "description": "Generates clarifying notes from Q&A pairs. Questions and answers arrays must have same length. Returns clarifying_notes."
+          },
+          "response": []
+        },
+        {
+          "name": "Solutions - Save",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "exec": [
+                  "if (!pm.environment.get('session_id')) {",
+                  "    console.warn('No session_id found. Run \"Chat - Start Session\" first.');",
+                  "}",
+                  "if (!pm.environment.get('problem_id')) {",
+                  "    console.warn('No problem_id found. Run \"Chat - Start Session\" first.');",
+                  "}"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.environment.set('solution_id', jsonData.solution_id);",
+                  "    console.log('Solution ID saved:', jsonData.solution_id);",
+                  "}"
+                ]
+              }
+            }
           ],
-          "path": [
-            "api",
-            "chat",
-            "message"
-          ]
-        },
-        "description": "Sends a response to follow-up questions. Message type should be 'response'."
-      },
-      "response": []
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"session_id\": \"{{session_id}}\",\n  \"problem_id\": \"{{problem_id}}\",\n  \"structured_problem\": {\n    \"title\": \"Database Timeout Issue\",\n    \"description\": \"Database connection is timing out when running complex queries\",\n    \"category\": \"database\"\n  },\n  \"structured_solution\": {\n    \"approach\": \"Query optimization and connection pooling\",\n    \"solution_steps\": [\n      \"Add database indexes on join columns\",\n      \"Implement query caching\",\n      \"Set up connection pooling with max 50 connections\",\n      \"Increase timeout to 60 seconds\"\n    ],\n    \"claimed_outcomes\": [\n      \"Improved query performance\",\n      \"Reduced timeouts\"\n    ]\n  },\n  \"clarifying_notes\": \"The team also implemented exponential backoff retry logic and monitored query performance before and after changes.\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/solutions/save",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "solutions",
+                "save"
+              ]
+            },
+            "description": "Saves a complete solution with structured problem and solution, optional clarifying notes. Updates solution with enhancements, saves to DB, finds root cause, generates summary. Returns solution_id, saved_at, root_cause, solution_summary."
+          },
+          "response": []
+        }
+      ]
     },
     {
-      "name": "Solutions - Validate Solution",
-      "event": [
+      "name": "Session",
+      "item": [
         {
-          "listen": "prerequest",
-          "script": {
-            "exec": [
-              "if (!pm.environment.get('problem_id')) {",
-              "    console.warn('No problem_id found. Run \"Chat - Start Session\" first.');",
-              "}"
-            ]
-          }
-        }
-      ],
-      "request": {
-        "method": "POST",
-        "header": [
-          {
-            "key": "Content-Type",
-            "value": "application/json"
-          }
-        ],
-        "body": {
-          "mode": "raw",
-          "raw": "{\n  \"user_solution\": \"We optimized the database queries by adding indexes on join columns, breaking down complex queries into smaller ones, implementing query caching, setting up connection pooling with 50 max connections, and increasing timeout to 60 seconds with retry logic.\",\n  \"problem_id\": \"{{problem_id}}\"\n}"
-        },
-        "url": {
-          "raw": "{{base_url}}/api/solutions/validate",
-          "host": [
-            "{{base_url}}"
+          "name": "Session - Save",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "exec": [
+                  "if (!pm.environment.get('session_id')) {",
+                  "    console.warn('No session_id found. Run \"Chat - Start Session\" first.');",
+                  "}"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.environment.set('solution_id', jsonData.solution_id);",
+                  "    console.log('Solution ID saved:', jsonData.solution_id);",
+                  "}"
+                ]
+              }
+            }
           ],
-          "path": [
-            "api",
-            "solutions",
-            "validate"
-          ]
-        },
-        "description": "Validates a solution against existing solutions for the problem. Returns match percentage and validation status."
-      },
-      "response": []
-    },
-    {
-      "name": "Solutions - Save Solution",
-      "event": [
-        {
-          "listen": "prerequest",
-          "script": {
-            "exec": [
-              "if (!pm.environment.get('session_id')) {",
-              "    console.warn('No session_id found. Run \"Chat - Start Session\" first.');",
-              "}"
-            ]
-          }
-        },
-        {
-          "listen": "test",
-          "script": {
-            "exec": [
-              "if (pm.response.code === 200) {",
-              "    var jsonData = pm.response.json();",
-              "    pm.environment.set('solution_id', jsonData.solution_id);",
-              "    console.log('Solution ID saved:', jsonData.solution_id);",
-              "}"
-            ]
-          }
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"session_id\": \"{{session_id}}\",\n  \"problem_description\": \"Database connection is timing out when running complex queries. The application hangs after 30 seconds of execution. This happens particularly with queries involving multiple joins across large tables with millions of records.\",\n  \"root_cause_analysis\": \"The root cause was inefficient query design with missing indexes on join columns, lack of query optimization, missing connection pooling, and insufficient timeout configuration.\",\n  \"solution_details\": {\n    \"steps\": [\n      \"Added database indexes on all join columns\",\n      \"Refactored complex queries into smaller, optimized queries\",\n      \"Implemented query result caching for frequently accessed data\",\n      \"Set up connection pooling with maximum 50 connections\",\n      \"Increased timeout from 30 to 60 seconds\",\n      \"Added retry logic with exponential backoff for transient failures\"\n    ],\n    \"outcomes\": [\n      \"Query execution time reduced by 70%\",\n      \"Connection timeouts eliminated\",\n      \"Application responsiveness improved\"\n    ]\n  }\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/session/save",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "session",
+                "save"
+              ]
+            },
+            "description": "Saves a complete session with problem description, root cause analysis, and solution details. Creates solution entry and updates session status to 'solution_saved'. Returns solution_id and saved_at."
+          },
+          "response": []
         }
-      ],
-      "request": {
-        "method": "POST",
-        "header": [
-          {
-            "key": "Content-Type",
-            "value": "application/json"
-          }
-        ],
-        "body": {
-          "mode": "raw",
-          "raw": "{\n  \"session_id\": \"{{session_id}}\",\n  \"problem_description\": \"Database connection is timing out when running complex queries. The application hangs after 30 seconds of execution. This happens particularly with queries involving multiple joins across large tables with millions of records.\",\n  \"root_cause_analysis\": \"The root cause was inefficient query design with missing indexes on join columns, lack of query optimization, missing connection pooling, and insufficient timeout configuration.\",\n  \"solution_details\": \"1. Added database indexes on all join columns\\n2. Refactored complex queries into smaller, optimized queries\\n3. Implemented query result caching for frequently accessed data\\n4. Set up connection pooling with maximum 50 connections\\n5. Increased timeout from 30 to 60 seconds\\n6. Added retry logic with exponential backoff for transient failures\"\n}"
-        },
-        "url": {
-          "raw": "{{base_url}}/api/solutions/save",
-          "host": [
-            "{{base_url}}"
-          ],
-          "path": [
-            "api",
-            "solutions",
-            "save"
-          ]
-        },
-        "description": "Saves a complete solution to the database with problem context and root cause analysis."
-      },
-      "response": []
-    },
-    {
-      "name": "Solutions - Get Solutions by Problem",
-      "event": [
-        {
-          "listen": "prerequest",
-          "script": {
-            "exec": [
-              "if (!pm.environment.get('problem_id')) {",
-              "    console.warn('No problem_id found. Run \"Chat - Start Session\" first.');",
-              "}"
-            ]
-          }
-        }
-      ],
-      "request": {
-        "method": "GET",
-        "header": [],
-        "url": {
-          "raw": "{{base_url}}/api/solutions/{{problem_id}}",
-          "host": [
-            "{{base_url}}"
-          ],
-          "path": [
-            "api",
-            "solutions",
-            "{{problem_id}}"
-          ]
-        },
-        "description": "Retrieves all solutions for a specific problem by problem_id."
-      },
-      "response": []
+      ]
     }
   ],
   "variable": [
@@ -301,7 +451,7 @@
       "key": "solution_id",
       "value": "",
       "type": "string",
-      "description": "Solution ID from solutions/save endpoint"
+      "description": "Solution ID from solutions/save or session/save endpoint"
     }
   ]
 }

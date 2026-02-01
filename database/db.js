@@ -4,7 +4,6 @@ import { v4 as uuidv4 } from "uuid";
 import {
   problemSchema,
   solutionSchema,
-  followUpQuestionSchema,
   chatSessionSchema,
   chatMessageSchema
 } from "../models/schemas.js";
@@ -16,17 +15,13 @@ dotenv.config();
 // These models provide methods for CRUD operations
 const Problem = mongoose.model("Problem", problemSchema);
 const Solution = mongoose.model("Solution", solutionSchema);
-const FollowUpQuestion = mongoose.model("FollowUpQuestion", followUpQuestionSchema);
 const ChatSession = mongoose.model("ChatSession", chatSessionSchema);
 const ChatMessage = mongoose.model("ChatMessage", chatMessageSchema);
 
 // Cache database connection instance to avoid reconnecting
 let db = null;
 
-/**
- * Connects to MongoDB and returns the database instance
- * @returns {Promise<Object>} Database instance
- */
+
 /**
  * Connects to MongoDB and returns the database instance
  * Uses connection pooling - reuses existing connection if available
@@ -65,11 +60,7 @@ export async function getDB() {
   }
 }
 
-/**
- * Inserts a new problem into the database
- * @param {Object} problemData - Problem data object
- * @returns {Promise<{success: boolean, problem_id?: string, error?: string}>}
- */
+
 /**
  * Inserts a new problem into the database
  * Creates a problem record with unique ID and timestamps
@@ -83,14 +74,6 @@ export async function insertProblem(problemData) {
 
     // Generate unique problem ID using UUID
     const problem_id = uuidv4();
-    // console.log({
-    //   problem_id: problem_id,
-    //   title: problemData.title,
-    //   description: problemData.description,
-    //   category: problemData.category,
-    //   created_at: new Date(), // Set creation timestamp
-    //   last_updated: new Date() // Set update timestamp
-    // });
     
     // Create new Problem document
     const problem = new Problem({
@@ -98,9 +81,11 @@ export async function insertProblem(problemData) {
       title: problemData.title,
       description: problemData.description,
       category: problemData.category,
-      created_at: new Date(), // Set creation timestamp
-      last_updated: new Date() // Set update timestamp
+      explicit_requirements: problemData.explicit_requirements || [],
+      created_at: new Date() // Set creation timestamp
     });
+
+    console.log("Saving problem to DB:", JSON.stringify(problem, null, 2));
 
     // Save to database
     await problem.save();
@@ -113,65 +98,25 @@ export async function insertProblem(problemData) {
   }
 }
 
-/**
- * Finds similar problems based on description
- * @param {string} description - Problem description to search for
- * @param {number} limit - Maximum number of results (default: 5)
- * @returns {Promise<Array>} Array of problem objects
- */
-/**
- * Finds similar problems based on description
- * Uses regex search on both title and description fields (case-insensitive)
- * @param {string} description - Problem description to search for
- * @param {number} limit - Maximum number of results (default: 5)
- * @returns {Promise<Array>} Array of problem objects
- */
-export async function findSimilarProblems(description, limit = 5) {
-  try {
-    // Ensure database connection
-    await getDB();
-
-    // Search for problems matching description in title or description fields
-    // Uses case-insensitive regex matching
-    const problems = await Problem.find({
-      $or: [
-        { description: { $regex: description, $options: "i" } }, // Case-insensitive search in description
-        { title: { $regex: description, $options: "i" } } // Case-insensitive search in title
-      ]
-    })
-      .limit(limit) // Limit results
-      .sort({ created_at: -1 }) // Sort by newest first
-      .lean(); // Return plain JavaScript objects (faster, no Mongoose overhead)
-
-    return problems;
-  } catch (error) {
-    // Return empty array on error to allow flow to continue
-    return [];
-  }
-}
 
 /**
  * Gets a problem by problem_id
  * @param {string} problem_id - Problem ID
  * @returns {Promise<Object|null>} Problem object or null
  */
-export async function getProblem(problem_id) {
-  try {
-    await getDB();
+// export async function getProblem(problem_id) {
+//   try {
+//     await getDB();
 
-    const problem = await Problem.findOne({ problem_id: problem_id }).lean();
+//     const problem = await Problem.findOne({ problem_id: problem_id }).lean();
 
-    return problem || null;
-  } catch (error) {
-    return null;
-  }
-}
+//     return problem || null;
+//   } catch (error) {
+//     return null;
+//   }
+// }
 
-/**
- * Inserts a new solution into the database
- * @param {Object} solutionData - Solution data object
- * @returns {Promise<{success: boolean, solution_id?: string, error?: string}>}
- */
+
 /**
  * Inserts a new solution into the database
  * Creates a solution record linked to a problem with validation metadata
@@ -190,10 +135,9 @@ export async function insertSolution(solutionData) {
     const solution = new Solution({
       solution_id: solution_id,
       problem_id: solutionData.problem_id, // Link to the problem
-      root_cause_analysis: solutionData.root_cause_analysis,
-      solution_details: solutionData.solution_details,
-      source: solutionData.source, // "human" or "ai"
-      confidence_score: solutionData.confidence_score, // Optional confidence score
+      session_id: solutionData.session_id, // Link to chat session
+      solution_steps: solutionData.solution_steps, // Detailed steps
+      claimed_outcomes: solutionData.claimed_outcomes, // Expected outcomes
       created_at: new Date(), // Timestamp
       verified_by_count: solutionData.verified_by_count || 0 // Number of times verified
     });
@@ -209,32 +153,29 @@ export async function insertSolution(solutionData) {
   }
 }
 
-/**
- * Gets a solution by solution_id
- * @param {string} solution_id - Solution ID
- * @returns {Promise<Object|null>} Solution object or null
- */
+
 /**
  * Gets a solution by solution_id
  * Retrieves a single solution document from the database
  * @param {string} solution_id - Solution ID to search for
  * @returns {Promise<Object|null>} Solution object or null if not found
  */
-export async function getSolution(solution_id) {
-  try {
-    // Ensure database connection
-    await getDB();
+// export async function getSolution(solution_id) {
+//   try {
+//     // Ensure database connection
+//     await getDB();
 
-    // Find solution by ID, return as plain object (lean)
-    const solution = await Solution.findOne({ solution_id: solution_id }).lean();
+//     // Find solution by ID, return as plain object (lean)
+//     const solution = await Solution.findOne({ solution_id: solution_id }).lean();
 
-    // Return solution or null if not found
-    return solution || null;
-  } catch (error) {
-    // Return null on error to allow graceful handling
-    return null;
-  }
-}
+//     // Return solution or null if not found
+//     return solution || null;
+//   } catch (error) {
+//     // Return null on error to allow graceful handling
+//     return null;
+//   }
+// }
+
 
 /**
  * Adds a follow-up question to a solution
@@ -242,26 +183,27 @@ export async function getSolution(solution_id) {
  * @param {Object} question - Question data object
  * @returns {Promise<{success: boolean, question_id?: string, error?: string}>}
  */
-export async function addFollowUpQuestion(solutionId, question) {
-  try {
-    await getDB();
+// export async function addFollowUpQuestion(solutionId, question) {
+//   try {
+//     await getDB();
 
-    const question_id = uuidv4();
-    const followUpQuestion = new FollowUpQuestion({
-      question_id: question_id,
-      solution_id: solutionId,
-      category: question.category,
-      is_answered: false,
-      response: null
-    });
+//     const question_id = uuidv4();
+//     const followUpQuestion = new FollowUpQuestion({
+//       question_id: question_id,
+//       solution_id: solutionId,
+//       category: question.category,
+//       is_answered: false,
+//       response: null
+//     });
 
-    await followUpQuestion.save();
+//     await followUpQuestion.save();
 
-    return { success: true, question_id: question_id };
-  } catch (error) {
-    return { success: false, error: error.message };
-  }
-}
+//     return { success: true, question_id: question_id };
+//   } catch (error) {
+//     return { success: false, error: error.message };
+//   }
+// }
+
 
 /**
  * Updates a follow-up question with a response
@@ -269,35 +211,31 @@ export async function addFollowUpQuestion(solutionId, question) {
  * @param {string} response - Response text
  * @returns {Promise<{success: boolean, error?: string}>}
  */
-export async function updateFollowUpQuestion(questionId, response) {
-  try {
-    await getDB();
+// export async function updateFollowUpQuestion(questionId, response) {
+//   try {
+//     await getDB();
 
-    const result = await FollowUpQuestion.updateOne(
-      { question_id: questionId },
-      {
-        $set: {
-          response: response,
-          is_answered: true
-        }
-      }
-    );
+//     const result = await FollowUpQuestion.updateOne(
+//       { question_id: questionId },
+//       {
+//         $set: {
+//           response: response,
+//           is_answered: true
+//         }
+//       }
+//     );
 
-    if (result.matchedCount === 0) {
-      return { success: false, error: "Question not found" };
-    }
+//     if (result.matchedCount === 0) {
+//       return { success: false, error: "Question not found" };
+//     }
 
-    return { success: true };
-  } catch (error) {
-    return { success: false, error: error.message };
-  }
-}
+//     return { success: true };
+//   } catch (error) {
+//     return { success: false, error: error.message };
+//   }
+// }
 
-/**
- * Creates a new chat session
- * @param {Object} sessionData - Session data object
- * @returns {Promise<{success: boolean, session_id?: string, error?: string}>}
- */
+
 /**
  * Creates a new chat session
  * Initializes a chat session with user, problem, and status tracking
@@ -333,6 +271,7 @@ export async function createChatSession(sessionData) {
   }
 }
 
+
 /**
  * Gets a chat session by session_id
  * @param {string} session_id - Session ID
@@ -350,11 +289,7 @@ export async function getChatSession(session_id) {
   }
 }
 
-/**
- * Adds a message to a chat session
- * @param {Object} messageData - Message data object
- * @returns {Promise<{success: boolean, message_id?: string, error?: string}>}
- */
+
 /**
  * Adds a message to a chat session
  * Saves message and increments session message counter
@@ -396,50 +331,126 @@ export async function addChatMessage(messageData) {
   }
 }
 
+
 /**
  * Gets all messages for a chat session
  * @param {string} session_id - Session ID
  * @returns {Promise<Array>} Array of message objects
  */
-export async function getChatMessages(session_id) {
-  try {
-    await getDB();
+// export async function getChatMessages(session_id) {
+//   try {
+//     await getDB();
 
-    const messages = await ChatMessage.find({ session_id: session_id })
-      .sort({ timestamp: 1 })
-      .lean();
+//     const messages = await ChatMessage.find({ session_id: session_id })
+//       .sort({ timestamp: 1 })
+//       .lean();
 
-    return messages;
-  } catch (error) {
-    return [];
-  }
-}
+//     return messages;
+//   } catch (error) {
+//     return [];
+//   }
+// }
 
-/**
- * Gets all solutions for a problem
- * @param {string} problem_id - Problem ID
- * @returns {Promise<Array>} Array of solution objects
- */
+
 /**
  * Gets all solutions for a problem
  * Retrieves all solutions linked to a specific problem, sorted by newest first
  * @param {string} problem_id - Problem ID to search for
  * @returns {Promise<Array>} Array of solution objects
  */
-export async function getSolutionsByProblemId(problem_id) {
+// export async function getSolutionsByProblemId(problem_id) {
+//   try {
+//     // Ensure database connection
+//     await getDB();
+
+//     // Find all solutions for this problem
+//     const solutions = await Solution.find({ problem_id: problem_id })
+//       .sort({ created_at: -1 }) // Sort by newest first
+//       .lean(); // Return as plain objects
+
+//     return solutions;
+//   } catch (error) {
+//     // Return empty array on error to allow flow to continue
+//     return [];
+//   }
+// }
+
+
+/**
+ * Updates a problem with root cause analysis and adds a solution reference
+ * Saves root cause information and links the solution to the problem
+ * @param {string} problem_id - Problem ID to update
+ * @param {Object} rootCauseData - Root cause data with cause and root_cause_summary
+ * @param {string} solution_id - Solution ID to add to solutions array
+ * @returns {Promise<{success: boolean, error?: string}>}
+ */
+export async function updateProblemWithRootCause(problem_id, rootCauseData, solution_id) {
   try {
     // Ensure database connection
     await getDB();
 
-    // Find all solutions for this problem
-    const solutions = await Solution.find({ problem_id: problem_id })
-      .sort({ created_at: -1 }) // Sort by newest first
-      .lean(); // Return as plain objects
+    // Find problem by problem_id first
+    const problem = await Problem.findOne({ problem_id: problem_id });
+    if (!problem) {
+      return { success: false, error: "Problem not found" };
+    }
 
-    return solutions;
+    // Update problem with root cause and push new solution to solutions array
+    const result = await Problem.updateOne(
+      { _id: problem._id },
+      {
+        root_cause: {
+          cause: rootCauseData.cause,
+          root_cause_summary: rootCauseData.root_cause_summary
+        },
+        $push: {
+          solutions: {
+            solutions_id: solution_id,
+            times_used: 1
+          }
+        }
+      }
+    );
+
+    if (result.matchedCount === 0) {
+      return { success: false, error: "Problem not found during update" };
+    }
+
+    return { success: true };
   } catch (error) {
-    // Return empty array on error to allow flow to continue
-    return [];
+    return { success: false, error: error.message };
+  }
+}
+
+
+/**
+ * Updates a chat session status and links a solution
+ * Marks session as complete and stores the solution reference
+ * @param {string} session_id - Session ID to update
+ * @param {string} solution_id - Solution ID to link
+ * @returns {Promise<{success: boolean, error?: string}>}
+ */
+export async function updateChatSessionStatus(session_id, solution_id) {
+  try {
+    // Ensure database connection
+    await getDB();
+
+    // Update session status to "solution_saved" and link solution
+    const result = await ChatSession.updateOne(
+      { session_id: session_id },
+      {
+        status: "solution_saved",
+        solution_id: solution_id
+      }
+    );
+
+    if (result.matchedCount === 0) {
+      return { success: false, error: "Chat session not found" };
+    }
+
+    return { success: true };
+  } catch (error) {
+    return { success: false, error: error.message };
   }
 }
 

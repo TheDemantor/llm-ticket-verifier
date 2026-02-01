@@ -1,6 +1,6 @@
 // Import Mongoose for schema definitions
 import mongoose from "mongoose";
-import { initializeOllama } from "../backend/ollamaClient";
+import { initializeOllama } from "../backend/ollamaClient.js";
 
 const { Schema } = mongoose;
 
@@ -24,7 +24,7 @@ export const problemSchema = new Schema(
     description: { type: String, required: true },
     title: { type: String },
     category: { type: String },
-    explicit_requirements: { type: [String]},
+    explicit_requirements: [{ type: String }],
     root_cause: {
       cause: { type: String },
       root_cause_summary: { type: String }
@@ -60,10 +60,10 @@ export const solutionSchema = new Schema(
     solution_id: { type: String, required: true },
     problem_id: { type: String, required: true },
     session_id: { type: String, required: true },
-    solution_steps: { type: String, required: true },
-    claimed_outcomes: { type: String, required: true },
+    solution_steps: [{ type: String, required: true }],
+    claimed_outcomes: [{ type: String, required: true }],
     created_at: { type: Date, default: Date.now, required: true },
-    verified_by_count: { type: Number, default: 0, required: true }
+    verified_by_count: { type: Number, default: 1, required: true }
   },
   { collection: "solutions_collection" }
 );
@@ -91,13 +91,13 @@ solutionSchema.index({ problem_id: 1 }); // Index on problem_id for finding all 
 export const chatSessionSchema = new Schema(
   {
     session_id: { type: String, required: true },
-    problem_id: { type: String, required: true },
-    solution_id: { type: String, required: true },
+    problem_id: { type: String },
+    solution_id: { type: String },
     user_id: { type: String, required: true },
     status: { type: String, enum: ["active", "evaluating_solution", "improving_solution", "solution_saved","closed"], required: true },
     created_at: { type: Date, default: Date.now, required: true },
-    problem_description: { type: String, required: true }, 
-    initialial_solution: { type: String, required: true },
+    problem_description: { type: String }, 
+    initial_solution: { type: String },
     clarifying_questions: { type: [String], default: [] },
     clarifying_solutions: { type: [String], default: [] },
   },
@@ -125,6 +125,7 @@ export const chatMessageSchema = new Schema(
     message_id: { type: String, required: true },
     session_id: { type: String, required: true },
     role: { type: String, enum: ["user", "assistant"], required: true },
+    message_type: { type: String, enum: ["user_solution", "bot", "response"], required: true },
     content: { type: String, required: true },
     timestamp: { type: Date, default: Date.now, required: true }
   },

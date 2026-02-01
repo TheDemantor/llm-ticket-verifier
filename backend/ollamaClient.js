@@ -90,7 +90,8 @@ export async function structurizeProbem(problemDesc){
       model: MODEL_NAME,
       prompt: prompt
     });
-
+    // console.log(response);
+    
     return response.response || response.message?.content || String(response);
   } catch (error) {
     throw new Error(`Failed to structurize problem: ${error.message}`);
@@ -128,7 +129,8 @@ export async function structurizeSolution(solutionDesc){
 export async function evaluateSolution(strProblem, strSolution){
     try {
     const prompt = prompts.evaluateSolution(strProblem, strSolution);
-
+    console.log(prompt);
+    
     const response = await ollama.generate({
       model: MODEL_NAME,
       prompt: prompt

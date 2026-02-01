@@ -9,22 +9,21 @@ import { v4 as uuidv4 } from "uuid";
 import {
   getDB,
   insertProblem,
-  findSimilarProblems,
-  getProblem,
   insertSolution,
-  getSolutionsByProblemId,
   createChatSession,
   getChatSession,
   addChatMessage,
-  getChatMessages
+  updateProblemWithRootCause,
+  updateChatSessionStatus
 } from "../database/db.js";
 
 // Import Mongoose for session updates
 import mongoose from "mongoose";
-import { chatSessionSchema } from "../models/schemas.js";
+import { chatSessionSchema, problemSchema } from "../models/schemas.js";
 
 // Create ChatSession model for direct database updates
 const ChatSession = mongoose.model("ChatSession", chatSessionSchema);
+const Problem = mongoose.model("Problem", problemSchema);
 
 // Import Ollama client functions for AI operations
 import {
@@ -34,8 +33,7 @@ import {
   generateNotes,
   reEvaluateSolution,
   updateSolution,
-  findRootCause,
-  summarizeSolution
+  findRootCause
 } from "./ollamaClient.js";
 
 // Load environment variables from .env file
@@ -74,6 +72,45 @@ const handleError = (res, error, code = "INTERNAL_ERROR") => {
   });
 };
 
+/**
+ * Parses Ollama response string that contains JSON in markdown format
+ * Extracts JSON from format like: "text...\n```\n{...}\n```"
+ * @param {string} ollamaResponse - Raw response string from Ollama
+ * @returns {Object} Parsed JSON object, or original response if parsing fails
+ */
+const parseOllamaResponse = (ollamaResponse) => {
+  try {
+    // Check if response is already an object
+    if (typeof ollamaResponse === 'object') {
+      return ollamaResponse;
+    }
+
+    // Convert to string if needed
+    const responseStr = String(ollamaResponse);
+
+    // Try to extract JSON from markdown code block format
+    // Pattern: ```json\n{...}\n``` or ```\n{...}\n```
+    const jsonMatch = responseStr.match(/```(?:json)?\s*\n?([\s\S]*?)\n?```/);
+    
+    if (jsonMatch && jsonMatch[1]) {
+      // Parse the extracted JSON
+      const parsedJson = JSON.parse(jsonMatch[1].trim());
+      console.log("Successfully parsed Ollama JSON response");
+      return parsedJson;
+    }
+
+    // If no markdown format found, try to parse the whole response as JSON
+    const directParse = JSON.parse(responseStr);
+    console.log("Successfully parsed Ollama response as direct JSON");
+    return directParse;
+  } catch (error) {
+    console.warn("Could not parse Ollama response as JSON:", error.message);
+    console.log("Returning raw response:", ollamaResponse);
+    // Return the original response if parsing fails
+    return ollamaResponse;
+  }
+};
+
 
 /**
  * POST /api/chat/start
@@ -83,11 +120,11 @@ const handleError = (res, error, code = "INTERNAL_ERROR") => {
 app.post("/api/chat/start", async (req, res) => {
   try {
     console.log("POST /api/chat/start - Input:", JSON.stringify(req.body, null, 2));
-    const { user_id, problem_description } = req.body;
+    const { user_id } = req.body;
 
-    if (!user_id || !problem_description) {
+    if (!user_id) {
       return res.status(400).json({
-        error: "user_id and problem_description are required",
+        error: "user_id is required",
         code: "MISSING_FIELDS"
       });
     }
@@ -98,43 +135,11 @@ app.post("/api/chat/start", async (req, res) => {
     // Generate session_id (uuid)
     const session_id = uuidv4();
 
-    // Create problem entry
-    const problemResult = await insertProblem({
-      title: problem_description.substring(0, 100),
-      description: problem_description,
-      category: "general"
-    });
-    // console.log(problemResult);
-    
-    if (!problemResult.success) {
-      return handleError(res, new Error(problemResult.error), "DB_ERROR");
-    }
-
-    const problem_id = problemResult.problem_id;
-
-    // Find similar problems (for internal LLM context only)
-    const similarProblems = await findSimilarProblems(problem_description, 5);
-
-    // Call ollamaClient.analyzeProblem with similar problems for context
-    // LLM uses similar_problems internally but returns only the simple question
-    let ai_response = "";
-    try {
-      const result = await analyzeProblem(problem_description, similarProblems);
-      console.log(result);
-      
-      ai_response = result.ai_response;
-    } catch (error) {
-      // Fallback to exact response on error
-      console.log(error.message)
-      ai_response = "I understand the problem. How did you solve this?";
-    }
-
     // Save session to DB with status "waiting_solution"
     const sessionResult = await createChatSession({
       session_id: session_id,
       user_id: user_id,
-      problem_id: problem_id,
-      status: "waiting_solution"
+      status: "active"
     });
 
     if (!sessionResult.success) {
@@ -143,8 +148,6 @@ app.post("/api/chat/start", async (req, res) => {
 
     res.json({
       session_id: session_id,
-      ai_response: ai_response,
-      problem_id: problem_id
     });
   } catch (error) {
     handleError(res, error, "CHAT_START_ERROR");
@@ -159,20 +162,20 @@ app.post("/api/chat/start", async (req, res) => {
 app.post("/api/chat/message", async (req, res) => {
   try {
     console.log("POST /api/chat/message - Input:", JSON.stringify(req.body, null, 2));
-    const { session_id, user_message, message_type, problem_id } = req.body;
+    const { session_id, content, message_type } = req.body;
 
     // Validate all required fields are present
-    if (!session_id || !user_message || !message_type) {
+    if (!session_id || !content || !message_type) {
       return res.status(400).json({
-        error: "session_id, user_message, and message_type are required",
+        error: "session_id, content, and message_type are required",
         code: "MISSING_FIELDS"
       });
     }
 
     // Validate message_type is one of the allowed values
-    if (!["user_solution", "response"].includes(message_type)) {
+    if (!["user_solution", "bot", "response"].includes(message_type)) {
       return res.status(400).json({
-        error: "message_type must be 'user_solution' or 'response'",
+        error: "message_type must be 'user_solution' or 'response' or 'bot'",
         code: "INVALID_MESSAGE_TYPE"
       });
     }
@@ -180,69 +183,13 @@ app.post("/api/chat/message", async (req, res) => {
     // Save user's message to chat history in database
     await addChatMessage({
       session_id: session_id,
-      role: "user",
-      content: user_message
+      role: message_type === "bot" ? "assistant" : "user",
+      message_type: message_type,
+      content: content
     });
 
-    // Retrieve full chat history for context
-    const messages = await getChatMessages(session_id);
-    // Get problem details for context in AI responses
-    const problem = await getProblem(problem_id);
-
-    // Initialize response variables
-    let aiResponse = "";
-    let nextAction = "ask_followup";
-
-    // Handle different message types differently
-    if (message_type === "user_solution") {
-      // User is providing their solution - analyze it with LLM
-      try {
-        aiResponse = await analyzeUserSolution(user_message);
-        // After analysis, next step is to validate against existing solutions
-        nextAction = "validate";
-      } catch (error) {
-        // Fallback response if analysis fails
-        aiResponse = "Thank you for providing your solution. I'll validate it against existing solutions.";
-        nextAction = "validate";
-      }
-    } else if (message_type === "response") {
-      // User is responding to a question - generate follow-up questions
-      try {
-        // Use problem description for context
-        const problemDesc = problem?.description || "Technical issue";
-        // Generate follow-up questions using Ollama
-        const questionsResult = await generateFollowUpQuestions(
-          user_message,
-          problemDesc
-        );
-        
-        // Check if questions were generated successfully
-        if (questionsResult.questions && questionsResult.questions.length > 0) {
-          // Format questions as numbered list
-          aiResponse = `Here are some follow-up questions to help improve the solution:\n\n${questionsResult.questions.map((q, i) => `${i + 1}. ${q}`).join("\n")}`;
-          nextAction = "ask_followup";
-        } else {
-          // No more questions - ready to save
-          aiResponse = "Thank you for the additional information. Would you like to save this solution?";
-          nextAction = "save_solution";
-        }
-      } catch (error) {
-        // Fallback if question generation fails
-        aiResponse = "I understand. Would you like to proceed with saving this solution?";
-        nextAction = "save_solution";
-      }
-    }
-
-    // Save AI's response to chat history
-    await addChatMessage({
-      session_id: session_id,
-      role: "assistant",
-      content: aiResponse
-    });
-
-    res.json({
-      response: aiResponse,
-      next_action: nextAction
+    res.status(200).json({
+      next_action: "continue"
     });
   } catch (error) {
     handleError(res, error, "CHAT_MESSAGE_ERROR");
@@ -253,7 +200,7 @@ app.post("/api/chat/message", async (req, res) => {
 /**
  * POST /api/structure/problem
  * Body: { problemDesc }
- * Returns: { structured_problem }
+ * Returns: { problem_id, structured_problem }
  */
 app.post("/api/structure/problem", async (req, res) => {
   try {
@@ -267,11 +214,45 @@ app.post("/api/structure/problem", async (req, res) => {
       });
     }
 
-    // Call structurizeProbem to structure the problem description
-    const structuredProblem = await structurizeProbem(problemDesc);
+    // Initialize database connection
+    await getDB();
+
+    // Step 1: Call structurizeProbem first to structure the problem and extract explicit requirements
+    console.log("Step 1: Structurizing problem...");
+    const structuredProblemRaw = await structurizeProbem(problemDesc);
+    // console.log("Raw Ollama response:", structuredProblemRaw);
+    
+    const structuredProblem = parseOllamaResponse(structuredProblemRaw);
+    // console.log("Parsed structured problem:", JSON.stringify(structuredProblem, null, 2));
+    // console.log("explicit_requirements type:", typeof structuredProblem.explicit_requirements);
+    // console.log("explicit_requirements value:", structuredProblem.explicit_requirements);
+
+    // Step 2: Save problem to database according to schema with explicit_requirements
+    console.log("Step 2: Saving problem to database...");
+    
+    // Ensure explicit_requirements is an array
+    const requirements = Array.isArray(structuredProblem.explicit_requirements) 
+      ? structuredProblem.explicit_requirements 
+      : [];
+    
+    // console.log("Requirements to save:", requirements);
+    
+    const problemResult = await insertProblem({
+      title: problemDesc.substring(0, 100),
+      description: problemDesc,
+      category: "general",
+      explicit_requirements: requirements
+    });
+
+    if (!problemResult.success) {
+      return handleError(res, new Error(problemResult.error), "DB_ERROR");
+    }
+
+    const problem_id = problemResult.problem_id;
 
     res.json({
       success: true,
+      problem_id: problem_id,
       structured_problem: structuredProblem
     });
   } catch (error) {
@@ -298,7 +279,8 @@ app.post("/api/structure/solution", async (req, res) => {
     }
 
     // Call structurizeSolution to structure the solution description
-    const structuredSolution = await structurizeSolution(solutionDesc);
+    const structuredSolutionRaw = await structurizeSolution(solutionDesc);
+    const structuredSolution = parseOllamaResponse(structuredSolutionRaw);
 
     res.json({
       success: true,
@@ -329,19 +311,31 @@ app.post("/api/solutions/validate", async (req, res) => {
       });
     }
 
-    let evaluationResult;
+    let evaluationResultRaw;
+    // // Update session status to "solution_saved"
+    // console.log("Step 6: Updating session status...");
+    // await ChatSession.updateOne(
+    //   { session_id: session_id },
+    //   { 
+    //     status: "solution_saved",
+    //     solution_id: solution_id
+    //   }
+    // );
 
     // Case 1: No clarifying notes - initial evaluation
     if (!clarifyingNotes) {
       console.log("Case 1: Initial evaluation (no clarifying notes)");
-      evaluationResult = await evaluateSolution(strProblem, strSolution);
+      evaluationResultRaw = await evaluateSolution(strProblem, strSolution);
     }
     // Case 2: With clarifying notes - re-evaluation
     else {
       console.log("Case 2: Re-evaluation with clarifying notes");
-      evaluationResult = await reEvaluateSolution(strProblem, strSolution, clarifyingNotes);
+      evaluationResultRaw = await reEvaluateSolution(strProblem, strSolution, clarifyingNotes);
     }
-
+    console.log("Raw evaluation result:", evaluationResultRaw);
+    const evaluationResult = parseOllamaResponse(evaluationResultRaw);
+    console.log(evaluationResult);
+    
     res.json({
       success: true,
       evaluation_result: evaluationResult
@@ -384,18 +378,19 @@ app.post("/api/generate/notes", async (req, res) => {
     }
 
     // Call generateNotes to synthesize clarifying notes
-    const notes = await generateNotes(questionsArray, answersArray);
+    const notesRaw = await generateNotes(questionsArray, answersArray);
+    const notes = parseOllamaResponse(notesRaw);
 
     res.json({
       success: true,
-      clarifying_notes: notes
+      ...notes
     });
   } catch (error) {
     handleError(res, error, "GENERATE_NOTES_ERROR");
   }
 });
 
-
+  
 /**
  * POST /api/solutions/save
  * Body: { session_id, problem_id, evaluation_result, structured_problem, structured_solution, clarifying_notes,  }
@@ -404,9 +399,9 @@ app.post("/api/generate/notes", async (req, res) => {
 app.post("/api/solutions/save", async (req, res) => {
   try {
     console.log("POST /api/solutions/save - Input:", JSON.stringify(req.body, null, 2));
-    const { session_id, problem_id, structured_problem, structured_solution, clarifying_notes } = req.body;
+    const { session_id, problem_id, strProblem, strSolution, clarifyingNotes } = req.body;
 
-    if (!session_id || !problem_id || !structured_problem || !structured_solution) {
+    if (!session_id || !problem_id || !strProblem || !strSolution) {
       return res.status(400).json({
         error: "session_id, problem_id, structured_problem, and structured_solution are required",
         code: "MISSING_FIELDS"
@@ -415,10 +410,11 @@ app.post("/api/solutions/save", async (req, res) => {
 
     // Step 1: Call updateSolution to enhance the solution with clarifying notes
     console.log("Step 1: Enhancing solution with clarifying notes...");
-    const enhancedSolution = clarifying_notes 
-      ? await updateSolution(structured_problem, structured_solution, clarifying_notes)
-      : structured_solution;
-
+    const enhancedSolutionRaw = clarifyingNotes 
+      ? await updateSolution(strProblem, strSolution, clarifyingNotes)
+      : strProblem;
+    const enhancedSolution = parseOllamaResponse(enhancedSolutionRaw);
+    
     // Step 2: Create a solution entry in the database with the given schema
     console.log("Step 2: Saving solution to database...");
     const solution_id = uuidv4();
@@ -434,46 +430,37 @@ app.post("/api/solutions/save", async (req, res) => {
       return handleError(res, new Error(solutionResult.error), "DB_INSERT_ERROR");
     }
 
-    // Step 3: Call findRootCause to find the root cause with strProblem and updated solution
+    // Step 3: Call findRootCause to find the root cause with strProblem and enhanced solution
     console.log("Step 3: Finding root cause...");
-    const rootCauseAnalysis = await findRootCause(structured_problem, enhancedSolution);
+    const rootCauseAnalysisRaw = await findRootCause(strProblem, enhancedSolution);
+    const rootCauseAnalysis = parseOllamaResponse(rootCauseAnalysisRaw);
 
     // Step 4: Save solution_id and root_cause to problem
     console.log("Step 4: Updating problem with solution_id and root_cause...");
-    const problem = await getProblem(problem_id);
-    if (problem && problem._id) {
-      // Update the problem with solution reference and root cause
-      await ChatSession.updateOne(
-        { _id: problem._id },
-        {
-          $addToSet: { 
-            solutions: { solution_id: solution_id, times_used: 1 }
-          }
-        }
-      );
+    const rootCauseResult = await updateProblemWithRootCause(
+      problem_id,
+      rootCauseAnalysis,
+      solution_id
+    );
+
+    if (!rootCauseResult.success) {
+      return handleError(res, new Error(rootCauseResult.error), "DB_UPDATE_ERROR");
     }
 
-    // Step 5: Generate solution summary (summarizeSolution)
-    console.log("Step 5: Generating solution summary...");
-    const solutionSummary = await summarizeSolution(structured_problem, enhancedSolution);
+    // Step 5: Update session status to "solution_saved"
+    console.log("Step 5: Updating session status...");
+    const sessionUpdateResult = await updateChatSessionStatus(session_id, solution_id);
 
-    // Step 6: Update session status to "solution_saved"
-    console.log("Step 6: Updating session status...");
-    await ChatSession.updateOne(
-      { session_id: session_id },
-      { 
-        status: "solution_saved",
-        solution_id: solution_id
-      }
-    );
+    if (!sessionUpdateResult.success) {
+      return handleError(res, new Error(sessionUpdateResult.error), "SESSION_UPDATE_ERROR");
+    }
 
     // Return solution_id, root_cause & solution_summary
     res.json({
       success: true,
       solution_id: solution_id,
       saved_at: new Date().toISOString(),
-      root_cause: rootCauseAnalysis,
-      solution_summary: solutionSummary
+      root_cause: rootCauseAnalysis
     });
   } catch (error) {
     handleError(res, error, "SAVE_SOLUTION_ERROR");
@@ -482,22 +469,30 @@ app.post("/api/solutions/save", async (req, res) => {
 
 /**
  * POST /api/session/save
- * Body: { session_id, problem_description, root_cause_analysis, solution_details }
+ * Body: { session_id, problem_description, initial_solution, clarifying_questions, clarifying_solutions, solution_details }
  * Returns: { success, solution_id, saved_at }
  */
 app.post("/api/session/save", async (req, res) => {
   try {
     console.log("POST /api/session/save - Input:", JSON.stringify(req.body, null, 2));
-    const { session_id, problem_description, root_cause_analysis, solution_details } = req.body;
+    const { 
+      session_id, 
+      problem_id,
+      solution_id,
+      problem_description, 
+      initial_solution,
+      clarifying_questions,
+      clarifying_solutions,
+    } = req.body;
 
-    if (!session_id || !problem_description || !solution_details) {
+    if (!session_id || !problem_description) {
       return res.status(400).json({
-        error: "session_id, problem_description, and solution_details are required",
+        error: "session_id and problem_description are required",
         code: "MISSING_FIELDS"
       });
     }
 
-    // Get current session from database
+    // Get current session from database to retrieve user_id and other details
     const session = await getChatSession(session_id);
     if (!session) {
       return res.status(404).json({
@@ -506,28 +501,29 @@ app.post("/api/session/save", async (req, res) => {
       });
     }
 
-    // Create new solution entry
-    const solution_id = uuidv4();
-    const solutionResult = await insertSolution({
-      solution_id: solution_id,
-      problem_id: session.problem_id,
+    // Update session with all schema fields
+    const updateData = {
       session_id: session_id,
-      solution_steps: solution_details.steps || solution_details,
-      claimed_outcomes: solution_details.outcomes || []
-    });
+      problem_id: problem_id,
+      solution_id: solution_id,
+      user_id: session.user_id,
+      status: "closed",
+      problem_description: problem_description,
+      initial_solution: initial_solution || null,
+      clarifying_questions: Array.isArray(clarifying_questions) ? clarifying_questions : [],
+      clarifying_solutions: Array.isArray(clarifying_solutions) ? clarifying_solutions : [],
+      created_at: session.created_at || new Date()
+    };
 
-    if (!solutionResult.success) {
-      return handleError(res, new Error(solutionResult.error), "DB_INSERT_ERROR");
-    }
 
-    // Update session status to "solution_saved" and link solution
+
+    // Also update session with additional fields using direct Mongoose update
     await ChatSession.updateOne(
       { session_id: session_id },
-      {
-        status: "solution_saved",
-        solution_id: solution_id
-      }
+      updateData
     );
+
+    console.log("Step: Session saved with all fields successfully");
 
     res.json({
       success: true,
@@ -563,7 +559,7 @@ app.get("/health", async (req, res) => {
  * Start the Express server
  * Listens on the configured PORT and logs server URL
  */
-app.listen(PORT, () => {
+app.listen(PORT, '0.0.0.0', () => {
   console.log(`Server is running on http://localhost:${PORT}`);
 });
 

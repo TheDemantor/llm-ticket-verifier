@@ -54,12 +54,12 @@ const evaluateSolution = (strProblem, strSolution) => {
 
     PROBLEM (JSON):
     ---
-    ${strProblem}
+    ${JSON.stringify(strProblem, null, 2)}
     ---
 
     SOLUTION (JSON):
     ---
-    ${strSolution}
+    ${JSON.stringify(strSolution, null, 2)}
     ---
 
     Follow these steps:
@@ -75,24 +75,25 @@ const evaluateSolution = (strProblem, strSolution) => {
     - a concise list: “Missing or weak points the solution should add or clarify”.
     6. based on "Missing or weak points the solution should add or clarify", prepare n  number of questions for the user to ask for clarifying these points. 
 
+    Output ONLY valid JSON — no explanations, no markdown, no text.
     Return JSON only with these keys:
     {
-    "requirement_coverage": [
-        {
-        "requirement": "...",
-        "type": "explicit|implicit",
-        "coverage": "full|partial|none",
-        "related_solution_steps": ["...", "..."],
-        "notes": "..."
-        }
-    ],
-    "unaddressed_constraints": ["...", "..."],
-    "unsatisfied_acceptance_criteria": ["...", "..."],
-    "extra_solution_features": ["...", "..."],
-    "coverage_score": 0,
-    "verdict": "sufficient|partially sufficient|insufficient",
-    "missing_or_weak_points": ["...", "..."],
-    "clarifying_questions": ["...", "..."]
+        "requirement_coverage": [
+            {
+            "requirement": "...",
+            "type": "explicit|implicit",
+            "coverage": "full|partial|none",
+            "related_solution_steps": ["...", "..."],
+            "notes": "..."
+            }
+        ],
+        "unaddressed_constraints": ["...", "..."],
+        "unsatisfied_acceptance_criteria": ["...", "..."],
+        "extra_solution_features": ["...", "..."],
+        "coverage_score": 0,
+        "verdict": "sufficient|partially sufficient|insufficient",
+        "missing_or_weak_points": ["...", "..."],
+        "clarifying_questions": ["...", "..."]
     }
 `;
 }
@@ -103,12 +104,21 @@ const generateNotes = (questionsArray, answersArray) => {
 
     You will receive clarifying questions and the user's answers. 
     Your task is to synthesize them into clear, concise notes that can be used to improve the solution.
-
+    
     Input JSON:
     {
     "clarifying_questions": ${JSON.stringify(questionsArray)},
     "answers": ${JSON.stringify(answersArray)}
     } 
+    INPUT (JSON) :
+    ---
+    ${JSON.stringify({
+        "clarifying_questions": questionsArray,
+        "answers": answersArray
+    }, null, 2)}
+    ---
+
+    Output ONLY valid JSON — no explanations, no markdown, no text.
 
     Steps:
     1. For each question–answer pair(based on index matching):
@@ -118,7 +128,7 @@ const generateNotes = (questionsArray, answersArray) => {
     - Concrete and implementation-ready.
     - Free of meta-talk about questions or the conversation.
 
-    Return JSON only with this shape:
+    Return JSON only with these keys:
     {
     "clarifying_notes": ["...", "..."]
     }
@@ -132,14 +142,14 @@ const reEvaluateSolution = (strProblem, strSolution) => {
 
     PROBLEM (JSON):
     ---
-    ${strProblem}
+    ${JSON.stringify(strProblem, null, 2)}
     ---
 
     SOLUTION (JSON):
     ---
-    ${strSolution}
+    ${JSON.stringify(strSolution, null, 2)}
     ---
-
+    
     Follow these steps:
     1. For each explicit and implicit requirement, state:
     - whether it is fully covered, partially covered, or not covered by the solution
@@ -154,7 +164,7 @@ const reEvaluateSolution = (strProblem, strSolution) => {
     6. find the answers to these “Missing or weak points the solution should add or clarify” in the "clarifying_notes" if they are provided
     7. based on remaining "Missing or weak points the solution should add or clarify", prepare n number of questions for the user to ask for clarifying these points. 
 
-
+    Output ONLY valid JSON — no explanations, no markdown, no text.
     Return JSON only with these keys:
     {
     "requirement_coverage": [
@@ -182,61 +192,51 @@ const updateSolution = (strProblem, strSolution, clarifyingNotes) => {
     return `You are an experienced Senior Analyst.
     You will be given three structured JSON inputs:
 
-    PROBLEM: ${strProblem}
+    PROBLEM: ${JSON.stringify(strProblem, null, 2)}
 
-    SOLUTION: ${strSolution}
+    SOLUTION: ${JSON.stringify(strSolution, null, 2)}
 
-    CLARIFYING_NOTES: ${clarifyingNotes}
+    CLARIFYING_NOTES: ${typeof clarifyingNotes === 'string' ? clarifyingNotes : JSON.stringify(clarifyingNotes, null, 2)}
 
     Your task:
 
     Examine each clarifying note to determine whether it impacts any part of the solution_steps or claimed_outcomes in the SOLUTION.
 
     If a note requires changes, update the SOLUTION accordingly. Adjust only what is necessary.
-
-    Output the revised SOLUTION strictly in JSON format, using the following structure:
-
-    json
+    
+    Output ONLY valid JSON — no explanations, no markdown, no text.
+    Return JSON only with these keys:
     {
     "solution_summary": "...",
     "solution_steps": ["...", "..."],
     "assumptions": ["...", "..."],
     "claimed_outcomes": ["...", "..."]
-    }`
+    }
+`;
 }
 
 
 const findRootCause = (strProblem, strSolution) => {
-    return `You are a senior IT support analyst specializing in root cause analysis.
-    
-    Your task is to identify and document the ROOT CAUSE of the problem based on the problem description and the solution provided.
+    return `You are a Senior IT Support Analyst. Output ONLY valid JSON - no text, no explanations.
 
-    PROBLEM (JSON):
-    ---
-    ${strProblem}
-    ---
+    INPUT:
+    PROBLEM: ${JSON.stringify(strProblem, null, 2)}
+    SOLUTION: ${JSON.stringify(strSolution, null, 2)}
 
-    SOLUTION (JSON):
-    ---
-    ${strSolution}
-    ---
+    TASK: Identify the ROOT CAUSE by tracing from SOLUTION back to PROBLEM.
 
-    Follow these steps:
-    1. Analyze the problem statement and identify the symptoms (what is broken/not working).
-    2. Examine the solution to understand what actions are being taken to fix the issue.
-    3. Trace back from the solution to identify the underlying ROOT CAUSE - the fundamental reason why the problem occurred.
-    4. Distinguish between:
-       - Symptom: The visible problem the user experiences
-       - Root Cause: The underlying reason it happened
-       - Contributing Factors: Other factors that contributed to the issue
-    5. Assess the likelihood and impact of this root cause.
-    6. Identify if there are multiple root causes or if this is a single issue with cascading effects.
+    STEPS:
+    1. Symptoms = what's broken (from PROBLEM)
+    2. Fix = what SOLUTION changes 
+    3. Root Cause = fundamental reason symptoms occurred
+    4. Distinguish: Symptom ≠ Root Cause ≠ Contributing Factors
 
-    Return JSON only with these keys:
+    OUTPUT EXACTLY:
     {
-        "cause": "...",
-        "root_cause_summary": "A clear, concise explanation of the primary root cause"
-    }`;
+    "cause": "1-sentence diagnostic check for this root cause",
+    "root_cause_summary": "Brief root cause explanation (2-3 sentences)"
+    }
+`;
 }
 
 
@@ -253,8 +253,7 @@ const summarizeSolution = (strSolution) => {
         "solution_summary": "A clear, concise summary of the solution steps",
         "claimed_outcome": "A clear, concise summary of the expected outcomes"
     }
-`
-
+`;}
 
 export default {
     structurizeProblem,
@@ -263,6 +262,7 @@ export default {
     generateNotes,
     reEvaluateSolution,
     updateSolution,
-    findRootCause
+    findRootCause,
+    summarizeSolution
 }
 
