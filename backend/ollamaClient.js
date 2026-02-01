@@ -129,7 +129,7 @@ export async function structurizeSolution(solutionDesc){
 export async function evaluateSolution(strProblem, strSolution){
     try {
     const prompt = prompts.evaluateSolution(strProblem, strSolution);
-    console.log(prompt);
+    // console.log(prompt);
     
     const response = await ollama.generate({
       model: MODEL_NAME,

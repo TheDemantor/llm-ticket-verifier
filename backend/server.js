@@ -95,17 +95,17 @@ const parseOllamaResponse = (ollamaResponse) => {
     if (jsonMatch && jsonMatch[1]) {
       // Parse the extracted JSON
       const parsedJson = JSON.parse(jsonMatch[1].trim());
-      console.log("Successfully parsed Ollama JSON response");
+      // console.log("Successfully parsed Ollama JSON response");
       return parsedJson;
     }
 
     // If no markdown format found, try to parse the whole response as JSON
     const directParse = JSON.parse(responseStr);
-    console.log("Successfully parsed Ollama response as direct JSON");
+    // console.log("Successfully parsed Ollama response as direct JSON");
     return directParse;
   } catch (error) {
     console.warn("Could not parse Ollama response as JSON:", error.message);
-    console.log("Returning raw response:", ollamaResponse);
+    // console.log("Returning raw response:", ollamaResponse);
     // Return the original response if parsing fails
     return ollamaResponse;
   }
@@ -119,7 +119,7 @@ const parseOllamaResponse = (ollamaResponse) => {
  */
 app.post("/api/chat/start", async (req, res) => {
   try {
-    console.log("POST /api/chat/start - Input:", JSON.stringify(req.body, null, 2));
+    // console.log("POST /api/chat/start - Input:", JSON.stringify(req.body, null, 2));
     const { user_id } = req.body;
 
     if (!user_id) {
@@ -161,7 +161,7 @@ app.post("/api/chat/start", async (req, res) => {
  */
 app.post("/api/chat/message", async (req, res) => {
   try {
-    console.log("POST /api/chat/message - Input:", JSON.stringify(req.body, null, 2));
+    // console.log("POST /api/chat/message - Input:", JSON.stringify(req.body, null, 2));
     const { session_id, content, message_type } = req.body;
 
     // Validate all required fields are present
@@ -204,7 +204,7 @@ app.post("/api/chat/message", async (req, res) => {
  */
 app.post("/api/structure/problem", async (req, res) => {
   try {
-    console.log("POST /api/structure/problem - Input:", JSON.stringify(req.body, null, 2));
+    // console.log("POST /api/structure/problem - Input:", JSON.stringify(req.body, null, 2));
     const { problemDesc } = req.body;
 
     if (!problemDesc) {
@@ -218,7 +218,7 @@ app.post("/api/structure/problem", async (req, res) => {
     await getDB();
 
     // Step 1: Call structurizeProbem first to structure the problem and extract explicit requirements
-    console.log("Step 1: Structurizing problem...");
+    // console.log("Step 1: Structurizing problem...");
     const structuredProblemRaw = await structurizeProbem(problemDesc);
     // console.log("Raw Ollama response:", structuredProblemRaw);
     
@@ -228,7 +228,7 @@ app.post("/api/structure/problem", async (req, res) => {
     // console.log("explicit_requirements value:", structuredProblem.explicit_requirements);
 
     // Step 2: Save problem to database according to schema with explicit_requirements
-    console.log("Step 2: Saving problem to database...");
+    // console.log("Step 2: Saving problem to database...");
     
     // Ensure explicit_requirements is an array
     const requirements = Array.isArray(structuredProblem.explicit_requirements) 
@@ -268,7 +268,7 @@ app.post("/api/structure/problem", async (req, res) => {
  */
 app.post("/api/structure/solution", async (req, res) => {
   try {
-    console.log("POST /api/structure/solution - Input:", JSON.stringify(req.body, null, 2));
+    // console.log("POST /api/structure/solution - Input:", JSON.stringify(req.body, null, 2));
     const { solutionDesc } = req.body;
 
     if (!solutionDesc) {
@@ -301,7 +301,7 @@ app.post("/api/structure/solution", async (req, res) => {
  */
 app.post("/api/solutions/validate", async (req, res) => {
   try {
-    console.log("POST /api/solutions/validate - Input:", JSON.stringify(req.body, null, 2));
+    // console.log("POST /api/solutions/validate - Input:", JSON.stringify(req.body, null, 2));
     const { strProblem, strSolution, clarifyingNotes } = req.body;
 
     if (!strProblem || !strSolution) {
@@ -324,17 +324,17 @@ app.post("/api/solutions/validate", async (req, res) => {
 
     // Case 1: No clarifying notes - initial evaluation
     if (!clarifyingNotes) {
-      console.log("Case 1: Initial evaluation (no clarifying notes)");
+      // console.log("Case 1: Initial evaluation (no clarifying notes)");
       evaluationResultRaw = await evaluateSolution(strProblem, strSolution);
     }
     // Case 2: With clarifying notes - re-evaluation
     else {
-      console.log("Case 2: Re-evaluation with clarifying notes");
+      // console.log("Case 2: Re-evaluation with clarifying notes");
       evaluationResultRaw = await reEvaluateSolution(strProblem, strSolution, clarifyingNotes);
     }
-    console.log("Raw evaluation result:", evaluationResultRaw);
+    // console.log("Raw evaluation result:", evaluationResultRaw);
     const evaluationResult = parseOllamaResponse(evaluationResultRaw);
-    console.log(evaluationResult);
+    // console.log(evaluationResult);
     
     res.json({
       success: true,
@@ -353,7 +353,7 @@ app.post("/api/solutions/validate", async (req, res) => {
  */
 app.post("/api/generate/notes", async (req, res) => {
   try {
-    console.log("POST /api/generate/notes - Input:", JSON.stringify(req.body, null, 2));
+    // console.log("POST /api/generate/notes - Input:", JSON.stringify(req.body, null, 2));
     const { questionsArray, answersArray } = req.body;
 
     if (!questionsArray || !answersArray) {
@@ -398,7 +398,7 @@ app.post("/api/generate/notes", async (req, res) => {
  */
 app.post("/api/solutions/save", async (req, res) => {
   try {
-    console.log("POST /api/solutions/save - Input:", JSON.stringify(req.body, null, 2));
+    // console.log("POST /api/solutions/save - Input:", JSON.stringify(req.body, null, 2));
     const { session_id, problem_id, strProblem, strSolution, clarifyingNotes } = req.body;
 
     if (!session_id || !problem_id || !strProblem || !strSolution) {
@@ -409,14 +409,14 @@ app.post("/api/solutions/save", async (req, res) => {
     }
 
     // Step 1: Call updateSolution to enhance the solution with clarifying notes
-    console.log("Step 1: Enhancing solution with clarifying notes...");
+    // console.log("Step 1: Enhancing solution with clarifying notes...");
     const enhancedSolutionRaw = clarifyingNotes 
       ? await updateSolution(strProblem, strSolution, clarifyingNotes)
       : strProblem;
     const enhancedSolution = parseOllamaResponse(enhancedSolutionRaw);
     
     // Step 2: Create a solution entry in the database with the given schema
-    console.log("Step 2: Saving solution to database...");
+    // console.log("Step 2: Saving solution to database...");
     const solution_id = uuidv4();
     const solutionResult = await insertSolution({
       solution_id: solution_id,
@@ -431,12 +431,12 @@ app.post("/api/solutions/save", async (req, res) => {
     }
 
     // Step 3: Call findRootCause to find the root cause with strProblem and enhanced solution
-    console.log("Step 3: Finding root cause...");
+    // console.log("Step 3: Finding root cause...");
     const rootCauseAnalysisRaw = await findRootCause(strProblem, enhancedSolution);
     const rootCauseAnalysis = parseOllamaResponse(rootCauseAnalysisRaw);
 
     // Step 4: Save solution_id and root_cause to problem
-    console.log("Step 4: Updating problem with solution_id and root_cause...");
+    // console.log("Step 4: Updating problem with solution_id and root_cause...");
     const rootCauseResult = await updateProblemWithRootCause(
       problem_id,
       rootCauseAnalysis,
@@ -448,7 +448,7 @@ app.post("/api/solutions/save", async (req, res) => {
     }
 
     // Step 5: Update session status to "solution_saved"
-    console.log("Step 5: Updating session status...");
+    // console.log("Step 5: Updating session status...");
     const sessionUpdateResult = await updateChatSessionStatus(session_id, solution_id);
 
     if (!sessionUpdateResult.success) {
@@ -474,7 +474,7 @@ app.post("/api/solutions/save", async (req, res) => {
  */
 app.post("/api/session/save", async (req, res) => {
   try {
-    console.log("POST /api/session/save - Input:", JSON.stringify(req.body, null, 2));
+    // console.log("POST /api/session/save - Input:", JSON.stringify(req.body, null, 2));
     const { 
       session_id, 
       problem_id,
@@ -523,7 +523,7 @@ app.post("/api/session/save", async (req, res) => {
       updateData
     );
 
-    console.log("Step: Session saved with all fields successfully");
+    // console.log("Step: Session saved with all fields successfully");
 
     res.json({
       success: true,
@@ -543,7 +543,7 @@ app.post("/api/session/save", async (req, res) => {
  */
 app.get("/health", async (req, res) => {
   try {
-    console.log("GET /health - Health check requested");
+    // console.log("GET /health - Health check requested");
     // Test database connection
     await getDB();
     // Return success status
@@ -560,6 +560,6 @@ app.get("/health", async (req, res) => {
  * Listens on the configured PORT and logs server URL
  */
 app.listen(PORT, '0.0.0.0', () => {
-  console.log(`Server is running on http://localhost:${PORT}`);
+  // console.log(`Server is running on http://localhost:${PORT}`);
 });
 

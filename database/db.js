@@ -85,7 +85,7 @@ export async function insertProblem(problemData) {
       created_at: new Date() // Set creation timestamp
     });
 
-    console.log("Saving problem to DB:", JSON.stringify(problem, null, 2));
+    // console.log("Saving problem to DB:", JSON.stringify(problem, null, 2));
 
     // Save to database
     await problem.save();
