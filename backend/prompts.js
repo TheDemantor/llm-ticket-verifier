@@ -230,11 +230,15 @@ const findRootCause = (strProblem, strSolution) => {
     2. Fix = what SOLUTION changes 
     3. Root Cause = fundamental reason symptoms occurred
     4. Distinguish: Symptom ≠ Root Cause ≠ Contributing Factors
+    5. Return two fields:
+       - "cause": 1-sentence diagnostic check for this root cause
+       - "root_cause_summary": brief root cause explanation (2-3 sentences)
 
-    OUTPUT EXACTLY:
+    Output ONLY valid JSON — no explanations, no markdown, no text.
+    Return JSON only with these keys:
     {
-    "cause": "1-sentence diagnostic check for this root cause",
-    "root_cause_summary": "Brief root cause explanation (2-3 sentences)"
+    "cause": "...",
+    "root_cause_summary": "..."
     }
 `;
 }

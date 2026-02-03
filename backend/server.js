@@ -224,8 +224,6 @@ app.post("/api/structure/problem", async (req, res) => {
     
     const structuredProblem = parseOllamaResponse(structuredProblemRaw);
     // console.log("Parsed structured problem:", JSON.stringify(structuredProblem, null, 2));
-    // console.log("explicit_requirements type:", typeof structuredProblem.explicit_requirements);
-    // console.log("explicit_requirements value:", structuredProblem.explicit_requirements);
 
     // Step 2: Save problem to database according to schema with explicit_requirements
     // console.log("Step 2: Saving problem to database...");
@@ -253,7 +251,14 @@ app.post("/api/structure/problem", async (req, res) => {
     res.json({
       success: true,
       problem_id: problem_id,
-      structured_problem: structuredProblem
+      // structured_problem: structuredProblem,
+      structured_problem: {
+        problem_summary: structuredProblem.problem_summary,
+        explicit_requirements: structuredProblem.explicit_requirements,
+        implicit_requirements: structuredProblem.implicit_requirements,
+        constraints: structuredProblem.constraints,
+        acceptance_criteria: structuredProblem.acceptance_criteria
+      }
     });
   } catch (error) {
     handleError(res, error, "STRUCTURE_PROBLEM_ERROR");
@@ -284,7 +289,12 @@ app.post("/api/structure/solution", async (req, res) => {
 
     res.json({
       success: true,
-      structured_solution: structuredSolution
+      structured_solution: {
+        solution_summary: structuredSolution.solution_summary,
+        solution_steps: structuredSolution.solution_steps,
+        assumptions: structuredSolution.assumptions,
+        claimed_outcomes: structuredSolution.claimed_outcomes
+      }
     });
   } catch (error) {
     handleError(res, error, "STRUCTURE_SOLUTION_ERROR");
@@ -312,15 +322,6 @@ app.post("/api/solutions/validate", async (req, res) => {
     }
 
     let evaluationResultRaw;
-    // // Update session status to "solution_saved"
-    // console.log("Step 6: Updating session status...");
-    // await ChatSession.updateOne(
-    //   { session_id: session_id },
-    //   { 
-    //     status: "solution_saved",
-    //     solution_id: solution_id
-    //   }
-    // );
 
     // Case 1: No clarifying notes - initial evaluation
     if (!clarifyingNotes) {
@@ -338,7 +339,16 @@ app.post("/api/solutions/validate", async (req, res) => {
     
     res.json({
       success: true,
-      evaluation_result: evaluationResult
+      evaluation_result: {
+        requirement_coverage: evaluationResult.requirement_coverage || [],
+        unaddressed_constraints: evaluationResult.unaddressed_constraints || [],
+        unsatisfied_acceptance_criteria: evaluationResult.unsatisfied_acceptance_criteria || [],
+        extra_solution_features: evaluationResult.extra_solution_features || [],
+        coverage_score: evaluationResult.coverage_score || 0,
+        verdict: evaluationResult.verdict || "insufficient",
+        missing_or_weak_points: evaluationResult.missing_or_weak_points || [],
+        clarifying_questions: evaluationResult.clarifying_questions || []
+    }
     });
   } catch (error) {
     handleError(res, error, "VALIDATION_ERROR");
@@ -383,7 +393,7 @@ app.post("/api/generate/notes", async (req, res) => {
 
     res.json({
       success: true,
-      ...notes
+      clarifying_notes: notes.clarifying_notes || []
     });
   } catch (error) {
     handleError(res, error, "GENERATE_NOTES_ERROR");
@@ -422,8 +432,8 @@ app.post("/api/solutions/save", async (req, res) => {
       solution_id: solution_id,
       problem_id: problem_id,
       session_id: session_id,
-      solution_steps: enhancedSolution.solution_steps || enhancedSolution,
-      claimed_outcomes: enhancedSolution.claimed_outcomes || []
+      solution_steps: enhancedSolution.solution_steps||strSolution.solution_steps,
+      claimed_outcomes: enhancedSolution.claimed_outcomes || strSolution.claimed_outcomes,
     });
 
     if (!solutionResult.success) {
@@ -439,7 +449,10 @@ app.post("/api/solutions/save", async (req, res) => {
     // console.log("Step 4: Updating problem with solution_id and root_cause...");
     const rootCauseResult = await updateProblemWithRootCause(
       problem_id,
-      rootCauseAnalysis,
+      {
+        cause: rootCauseAnalysis.cause || "",
+        root_cause_summary: rootCauseAnalysis.root_cause_summary || "",
+      },
       solution_id
     );
 
@@ -460,7 +473,10 @@ app.post("/api/solutions/save", async (req, res) => {
       success: true,
       solution_id: solution_id,
       saved_at: new Date().toISOString(),
-      root_cause: rootCauseAnalysis
+      root_cause: {
+        cause: rootCauseAnalysis.cause || "",
+        root_cause_summary: rootCauseAnalysis.root_cause_summary || "",
+      }
     });
   } catch (error) {
     handleError(res, error, "SAVE_SOLUTION_ERROR");
@@ -527,7 +543,7 @@ app.post("/api/session/save", async (req, res) => {
 
     res.json({
       success: true,
-      solution_id: solution_id,
+      session_id: session_id,
       saved_at: new Date().toISOString()
     });
   } catch (error) {
