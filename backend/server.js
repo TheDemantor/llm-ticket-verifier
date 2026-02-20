@@ -453,7 +453,7 @@ app.post("/api/solutions/save", async (req, res) => {
       problem_id,
       {
         cause: rootCauseAnalysis.cause || "",
-        root_cause_summary: rootCauseAnalysis.root_cause_summary || "",
+        root_cause_summary: rootCauseAnalysis.root_cause_summary || rootCauseAnalysis,
       },
       solution_id
     );
