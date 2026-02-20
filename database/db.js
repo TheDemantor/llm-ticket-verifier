@@ -127,13 +127,10 @@ export async function insertSolution(solutionData) {
   try {
     // Ensure database connection
     await getDB();
-
-    // Generate unique solution ID
-    const solution_id = uuidv4();
     
     // Create new Solution document with all required fields
     const solution = new Solution({
-      solution_id: solution_id,
+      solution_id: solutionData.solution_id,
       problem_id: solutionData.problem_id, // Link to the problem
       session_id: solutionData.session_id, // Link to chat session
       solution_steps: solutionData.solution_steps, // Detailed steps

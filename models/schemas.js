@@ -81,7 +81,7 @@ solutionSchema.index({ problem_id: 1 }); // Index on problem_id for finding all 
  * - problem_id: Links to problem being discussed
  * - solution_id: Links to solution being worked on
  * - user_id: User who started the session
- * - status: Session state (active/evaluating_solution/improving_solution/solution_saved/closed)
+ * - status: Session state (active/evaluating_solution/improving_solution/sufficient_solution/unsatisfactory_solution/solution_saved/closed)
  * - problem_description: Full problem statement
  * - initialial_solution: User's initial solution
  * - clarifying_questions: Questions asked to improve solution
@@ -94,7 +94,7 @@ export const chatSessionSchema = new Schema(
     problem_id: { type: String },
     solution_id: { type: String },
     user_id: { type: String, required: true },
-    status: { type: String, enum: ["active", "evaluating_solution", "improving_solution", "solution_saved","closed"], required: true },
+    status: { type: String, enum: ["active", "evaluating_solution", "improving_solution", "sufficient_solution", "unsatisfactory_solution", "solution_saved","closed"], required: true },
     created_at: { type: Date, default: Date.now, required: true },
     problem_description: { type: String }, 
     initial_solution: { type: String },

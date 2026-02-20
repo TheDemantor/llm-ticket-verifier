@@ -12,6 +12,7 @@ const structurizeProblem = (problemDesc) => {
     4. List constraints (time, budget, tech, scope, etc.) if present. 
     5. List acceptance/success criteria (what must be true to call this “done”). 
     
+    Output ONLY valid JSON — no explanations, no markdown, no text.
     Return JSON only with these keys: 
     { 
         "problem_summary": "...", 
@@ -37,6 +38,7 @@ const structurizeSolution = (solutionDesc) => {
     3. List assumptions the solution makes about the context, users, or system.
     4. List what outcomes/results the solution claims to achieve.
 
+    Output ONLY valid JSON — no explanations, no markdown, no text.
     Return JSON only with these keys:
     {
     "solution_summary": "...",
