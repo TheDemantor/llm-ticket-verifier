@@ -8,7 +8,7 @@ const run = async () => {
   ];
 
   const result = await validateSolutionAgainstOld(newSolution, oldSolutions);
-  console.log(result);
+  // console.log(result);
 };
 
 run().catch(console.error);

@@ -103,9 +103,13 @@ Before running the project, ensure you have:
    ```
 
 2. Activate the virtual environment:
-   - **Windows**:
+   - **Windows (Command Prompt/PowerShell)**:
      ```bash
      venv\Scripts\activate
+     ```
+   - **Windows (Git Bash/MinGW)**:
+     ```bash
+     source venv/Scripts/activate
      ```
    - **macOS/Linux**:
      ```bash
