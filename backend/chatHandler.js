@@ -10,7 +10,7 @@ import {
   analyzeProblem,
   generateFollowUpQuestions,
   validateSolutionAgainstOld
-} from "./ollamaClient.js";
+} from "./deepseekClient.js";
 /**
  * Processes user messages based on message type and conversation flow state
  * Implements complete chat flow logic with different behaviors per phase

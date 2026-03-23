@@ -25,7 +25,8 @@ import { chatSessionSchema, problemSchema } from "../models/schemas.js";
 const ChatSession = mongoose.model("ChatSession", chatSessionSchema);
 const Problem = mongoose.model("Problem", problemSchema);
 
-// Import Ollama client functions for AI operations
+// Import DeepSeek client functions for AI operations
+// CHANGED: Switched from ollamaClient.js to deepseekClient.js
 import {
   structurizeProbem,
   structurizeSolution,
@@ -34,7 +35,7 @@ import {
   reEvaluateSolution,
   updateSolution,
   findRootCause
-} from "./ollamaClient.js";
+} from "./deepseekClient.js";
 
 // Load environment variables from .env file
 dotenv.config();
@@ -73,20 +74,20 @@ const handleError = (res, error, code = "INTERNAL_ERROR") => {
 };
 
 /**
- * Parses Ollama response string that contains JSON in markdown format
+ * Parses DeepSeek response string that contains JSON in markdown format
  * Extracts JSON from format like: "text...\n```\n{...}\n```"
- * @param {string} ollamaResponse - Raw response string from Ollama
+ * @param {string} deepseekResponse - Raw response string from DeepSeek
  * @returns {Object} Parsed JSON object, or original response if parsing fails
  */
-const parseOllamaResponse = (ollamaResponse) => {
+const parseDeepSeekResponse = (deepseekResponse) => {
   try {
     // Check if response is already an object
-    if (typeof ollamaResponse === 'object') {
-      return ollamaResponse;
+    if (typeof deepseekResponse === 'object') {
+      return deepseekResponse;
     }
 
     // Convert to string if needed
-    const responseStr = String(ollamaResponse);
+    const responseStr = String(deepseekResponse);
 
     // Try to extract JSON from markdown code block format
     // Pattern: ```json\n{...}\n``` or ```\n{...}\n```
@@ -95,19 +96,19 @@ const parseOllamaResponse = (ollamaResponse) => {
     if (jsonMatch && jsonMatch[1]) {
       // Parse the extracted JSON
       const parsedJson = JSON.parse(jsonMatch[1].trim());
-      console.log("Successfully parsed Ollama JSON response");
+      console.log("Successfully parsed DeepSeek JSON response");
       return parsedJson;
     }
 
     // If no markdown format found, try to parse the whole response as JSON
     const directParse = JSON.parse(responseStr);
-    console.log("Successfully parsed Ollama response as direct JSON");
+    console.log("Successfully parsed DeepSeek response as direct JSON");
     return directParse;
   } catch (error) {
-    console.warn("Could not parse Ollama response as JSON:", error.message);
-    console.log("Returning raw response:", ollamaResponse);
+    console.warn("Could not parse DeepSeek response as JSON:", error.message);
+    console.log("Returning raw response:", deepseekResponse);
     // Return the original response if parsing fails
-    return ollamaResponse;
+    return deepseekResponse;
   }
 };
 
@@ -224,7 +225,7 @@ app.post("/api/structure/problem", async (req, res) => {
     const structuredProblemRaw = await structurizeProbem(problemDesc);
     // console.log("Raw Ollama response:", structuredProblemRaw);
     
-    const structuredProblem = parseOllamaResponse(structuredProblemRaw);
+    const structuredProblem = parseDeepSeekResponse(structuredProblemRaw);
     // console.log("Parsed structured problem:", JSON.stringify(structuredProblem, null, 2));
 
     // Step 2: Save problem to database according to schema with explicit_requirements
@@ -287,7 +288,7 @@ app.post("/api/structure/solution", async (req, res) => {
 
     // Call structurizeSolution to structure the solution description
     const structuredSolutionRaw = await structurizeSolution(solutionDesc);
-    const structuredSolution = parseOllamaResponse(structuredSolutionRaw);
+    const structuredSolution = parseDeepSeekResponse(structuredSolutionRaw);
 
     res.json({
       success: true,
@@ -336,7 +337,7 @@ app.post("/api/solutions/validate", async (req, res) => {
       evaluationResultRaw = await reEvaluateSolution(strProblem, strSolution, clarifyingNotes);
     }
     // console.log("Raw evaluation result:", evaluationResultRaw);
-    const evaluationResult = parseOllamaResponse(evaluationResultRaw);
+    const evaluationResult = parseDeepSeekResponse(evaluationResultRaw);
     console.log(evaluationResult);
     
     res.json({
@@ -391,7 +392,7 @@ app.post("/api/generate/notes", async (req, res) => {
 
     // Call generateNotes to synthesize clarifying notes
     const notesRaw = await generateNotes(questionsArray, answersArray);
-    const notes = parseOllamaResponse(notesRaw);
+    const notes = parseDeepSeekResponse(notesRaw);
 
     res.json({
       success: true,
@@ -425,7 +426,7 @@ app.post("/api/solutions/save", async (req, res) => {
     const enhancedSolutionRaw = clarifyingNotes 
       ? await updateSolution(strProblem, strSolution, clarifyingNotes)
       : strProblem;
-    const enhancedSolution = parseOllamaResponse(enhancedSolutionRaw);
+    const enhancedSolution = parseDeepSeekResponse(enhancedSolutionRaw);
     
     // Step 2: Create a solution entry in the database with the given schema
     console.log("Step 2: Saving solution to database...");
@@ -445,7 +446,7 @@ app.post("/api/solutions/save", async (req, res) => {
     // Step 3: Call findRootCause to find the root cause with strProblem and enhanced solution
     console.log("Step 3: Finding root cause...");
     const rootCauseAnalysisRaw = await findRootCause(strProblem, enhancedSolution);
-    const rootCauseAnalysis = parseOllamaResponse(rootCauseAnalysisRaw);
+    const rootCauseAnalysis = parseDeepSeekResponse(rootCauseAnalysisRaw);
 
     // Step 4: Save solution_id and root_cause to problem
     console.log("Step 4: Updating problem with solution_id and root_cause...");
