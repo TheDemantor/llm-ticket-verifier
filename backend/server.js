@@ -83,6 +83,7 @@ const parseDeepSeekResponse = (deepseekResponse) => {
   try {
     // Check if response is already an object
     if (typeof deepseekResponse === 'object') {
+      console.log("DeepSeek response is already an object, no parsing needed");
       return deepseekResponse;
     }
 
@@ -450,6 +451,7 @@ app.post("/api/solutions/save", async (req, res) => {
 
     // Step 4: Save solution_id and root_cause to problem
     console.log("Step 4: Updating problem with solution_id and root_cause...");
+    console.log("Root cause analysis result:", rootCauseAnalysis);
     const rootCauseResult = await updateProblemWithRootCause(
       problem_id,
       {

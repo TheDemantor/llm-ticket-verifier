@@ -143,7 +143,7 @@ export async function insertSolution(solutionData) {
     await solution.save();
 
     // Return success with generated solution ID
-    return { success: true, solution_id: solution_id };
+    return { success: true, solution_id: solutionData.solution_id };
   } catch (error) {
     // Return error in structured format
     return { success: false, error: error.message };

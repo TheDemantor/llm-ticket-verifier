@@ -233,7 +233,7 @@ export async function findRootCause(strProblem, strSolution, evaluationReport){
     });
     
     const responseContent = response.choices[0].message.content || String(response);
-    return { response: responseContent, cause: responseContent };
+    return responseContent;
   } catch (error) {
     throw new Error(`Failed to find root cause: ${error.message}`);
   }
