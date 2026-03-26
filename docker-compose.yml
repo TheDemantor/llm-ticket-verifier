@@ -1,0 +1,87 @@
+version: '3.8'
+
+services:
+  # MongoDB Database
+  mongodb:
+    image: mongo:7.0-alpine
+    container_name: dqms_mongodb
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: root
+      MONGO_INITDB_ROOT_PASSWORD: changeme
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongodb_data:/data/db
+      - mongodb_config:/data/configdb
+    restart: unless-stopped
+    networks:
+      - dqms_network
+
+  # Node.js Backend API
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: dqms_backend
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      MONGODB_URI: mongodb://root:changeme@mongodb:27017/?authSource=admin
+      DB_NAME: it_support_dqms
+      LLM_PROVIDER: ollama
+      OLLAMA_BASE_URL: http://ollama:11434
+      FRONTEND_URL: http://localhost:8501
+    ports:
+      - "3000:3000"
+    depends_on:
+      - mongodb
+      - ollama
+    restart: unless-stopped
+    networks:
+      - dqms_network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # Streamlit Frontend
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile.streamlit
+    container_name: dqms_frontend
+    environment:
+      STREAMLIT_SERVER_PORT: 8501
+      STREAMLIT_SERVER_ADDRESS: 0.0.0.0
+      STREAMLIT_SERVER_HEADLESS: true
+    ports:
+      - "8501:8501"
+    depends_on:
+      - backend
+    restart: unless-stopped
+    networks:
+      - dqms_network
+
+  # Ollama LLM Service (Optional - for local LLM)
+  ollama:
+    image: ollama/ollama:latest
+    container_name: dqms_ollama
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    restart: unless-stopped
+    networks:
+      - dqms_network
+    # Note: In production, you may want to use a remote LLM service instead
+
+networks:
+  dqms_network:
+    driver: bridge
+
+volumes:
+  mongodb_data:
+  mongodb_config:
+  ollama_data:
