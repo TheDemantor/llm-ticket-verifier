@@ -20,7 +20,7 @@ RUN apk add --no-cache dumb-init
 # Copy dependencies from builder
 COPY --from=backend-builder /app/node_modules ./node_modules
 
-# Copy application code
+# Copy application code (exclude .env via .dockerignore)
 COPY . .
 
 # Create non-root user for security
