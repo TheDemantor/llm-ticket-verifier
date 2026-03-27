@@ -146,7 +146,7 @@ def show_solution_preview():
 def call_backend(endpoint, method="GET", payload=None):
     """Makes HTTP requests to backend API. Input: endpoint (str), method (GET/POST), payload (dict). Output: dict with response or error."""
     try:
-        base_url = os.getenv("NODE_SERVER_URL", "http://192.168.1.9:3000")
+        base_url = os.getenv("NODE_SERVER_URL", "https://llm-ticket-verifier.onrender.com")
         url = f"{base_url}{endpoint}"
         if method == "GET":
             print(f"Get {url}")
