@@ -13,7 +13,7 @@ import {
   createChatSession,
   getChatSession,
   addChatMessage,
-  updateProblemWithRootCause,
+  updateRootCauseAndSolution,
   updateChatSessionStatus
 } from "../database/db.js";
 
@@ -33,12 +33,44 @@ import {
   evaluateSolution,
   generateNotes,
   reEvaluateSolution,
-  updateSolution,
+  // updateSolution,
   findRootCause
 } from "./deepseekClient.js";
 
 // Load environment variables from .env file
 dotenv.config();
+
+// Enable/disable logging via environment variable
+const ENABLE_LOGS = process.env.ENABLE_LOGS === 'true';
+
+/**
+ * Utility function for organized logging
+ * Logs input and output of API endpoints in a formatted manner
+ * Set ENABLE_LOGS=true in .env to enable logging
+ * @param {string} endpoint - The API endpoint name
+ * @param {Object} data - Data object containing 'input' and/or 'output' keys
+ */
+const logRequest = (endpoint, data) => {
+  if (!ENABLE_LOGS) return;
+  
+  const timestamp = new Date().toISOString();
+  console.log(`\n${'='.repeat(80)}`);
+  console.log(`[${timestamp}] Endpoint: ${endpoint}`);
+  
+  if (data.input) {
+    console.log(`Input: ${JSON.stringify(data.input, null, 2)}`);
+  }
+  
+  if (data.output) {
+    console.log(`Output: ${JSON.stringify(data.output, null, 2)}`);
+  }
+  
+  if (data.error) {
+    console.log(`Error: ${data.error}`);
+  }
+  
+  console.log(`${'='.repeat(80)}\n`);
+};
 
 // Initialize Express application
 const app = express();
@@ -121,7 +153,7 @@ const parseDeepSeekResponse = (deepseekResponse) => {
  */
 app.post("/api/chat/start", async (req, res) => {
   try {
-    // console.log("POST /api/chat/start - Input:", JSON.stringify(req.body, null, 2));
+    logRequest("POST /api/chat/start", { input: req.body });
     const { user_id } = req.body;
 
     if (!user_id) {
@@ -148,57 +180,55 @@ app.post("/api/chat/start", async (req, res) => {
       return handleError(res, new Error(sessionResult.error), "SESSION_CREATE_ERROR");
     }
     
-    console.log("Session created:", session_id);
-
-    res.json({
-      session_id: session_id,
-    });
+    const responseData = { session_id: session_id };
+    logRequest("POST /api/chat/start", { output: responseData });
+    res.json(responseData);
   } catch (error) {
     handleError(res, error, "CHAT_START_ERROR");
   }
 });
 
-/**
- * POST /api/chat/message
- * Body: { session_id, user_message, message_type (user_solution/response) }
- * Returns: { response, next_action (validate/ask_followup/save_solution) }
- */
-app.post("/api/chat/message", async (req, res) => {
-  try {
-    // console.log("POST /api/chat/message - Input:", JSON.stringify(req.body, null, 2));
-    const { session_id, content, message_type } = req.body;
+// /**
+//  * POST /api/chat/message
+//  * Body: { session_id, user_message, message_type (user_solution/response) }
+//  * Returns: { response, next_action (validate/ask_followup/save_solution) }
+//  */
+// app.post("/api/chat/message", async (req, res) => {
+//   try {
+//     logRequest("POST /api/chat/message", { input: req.body });
+//     const { session_id, content, message_type } = req.body;
 
-    // Validate all required fields are present
-    if (!session_id || !content || !message_type) {
-      return res.status(400).json({
-        error: "session_id, content, and message_type are required",
-        code: "MISSING_FIELDS"
-      });
-    }
+//     // Validate all required fields are present
+//     if (!session_id || !content || !message_type) {
+//       return res.status(400).json({
+//         error: "session_id, content, and message_type are required",
+//         code: "MISSING_FIELDS"
+//       });
+//     }
 
-    // Validate message_type is one of the allowed values
-    if (!["user_solution", "bot", "response"].includes(message_type)) {
-      return res.status(400).json({
-        error: "message_type must be 'user_solution' or 'response' or 'bot'",
-        code: "INVALID_MESSAGE_TYPE"
-      });
-    }
+//     // Validate message_type is one of the allowed values
+//     if (!["user_solution", "bot", "response"].includes(message_type)) {
+//       return res.status(400).json({
+//         error: "message_type must be 'user_solution' or 'response' or 'bot'",
+//         code: "INVALID_MESSAGE_TYPE"
+//       });
+//     }
 
-    // Save user's message to chat history in database
-    await addChatMessage({
-      session_id: session_id,
-      role: message_type === "bot" ? "assistant" : "user",
-      message_type: message_type,
-      content: content
-    });
+//     // Save user's message to chat history in database
+//     await addChatMessage({
+//       session_id: session_id,
+//       role: message_type === "bot" ? "assistant" : "user",
+//       message_type: message_type,
+//       content: content
+//     });
 
-    res.status(200).json({
-      next_action: "continue"
-    });
-  } catch (error) {
-    handleError(res, error, "CHAT_MESSAGE_ERROR");
-  }
-});
+//     const responseData = { next_action: "continue" };
+//     logRequest("POST /api/chat/message", { output: responseData });
+//     res.status(200).json(responseData);
+//   } catch (error) {
+//     handleError(res, error, "CHAT_MESSAGE_ERROR");
+//   }
+// });
 
 
 /**
@@ -208,7 +238,7 @@ app.post("/api/chat/message", async (req, res) => {
  */
 app.post("/api/structure/problem", async (req, res) => {
   try {
-    // console.log("POST /api/structure/problem - Input:", JSON.stringify(req.body, null, 2));
+    logRequest("POST /api/structure/problem", { input: req.body });
     const { problemDesc } = req.body;
 
     if (!problemDesc) {
@@ -252,10 +282,9 @@ app.post("/api/structure/problem", async (req, res) => {
 
     const problem_id = problemResult.problem_id;
 
-    res.json({
+    const responseData = {
       success: true,
       problem_id: problem_id,
-      // structured_problem: structuredProblem,
       structured_problem: {
         problem_summary: structuredProblem.problem_summary,
         explicit_requirements: structuredProblem.explicit_requirements,
@@ -263,7 +292,9 @@ app.post("/api/structure/problem", async (req, res) => {
         constraints: structuredProblem.constraints,
         acceptance_criteria: structuredProblem.acceptance_criteria
       }
-    });
+    };
+    logRequest("POST /api/structure/problem", { output: responseData });
+    res.json(responseData);
   } catch (error) {
     handleError(res, error, "STRUCTURE_PROBLEM_ERROR");
   }
@@ -277,7 +308,7 @@ app.post("/api/structure/problem", async (req, res) => {
  */
 app.post("/api/structure/solution", async (req, res) => {
   try {
-    // console.log("POST /api/structure/solution - Input:", JSON.stringify(req.body, null, 2));
+    logRequest("POST /api/structure/solution", { input: req.body });
     const { solutionDesc } = req.body;
 
     if (!solutionDesc) {
@@ -291,7 +322,7 @@ app.post("/api/structure/solution", async (req, res) => {
     const structuredSolutionRaw = await structurizeSolution(solutionDesc);
     const structuredSolution = parseDeepSeekResponse(structuredSolutionRaw);
 
-    res.json({
+    const responseData = {
       success: true,
       structured_solution: {
         solution_summary: structuredSolution.solution_summary,
@@ -299,7 +330,9 @@ app.post("/api/structure/solution", async (req, res) => {
         assumptions: structuredSolution.assumptions,
         claimed_outcomes: structuredSolution.claimed_outcomes
       }
-    });
+    };
+    logRequest("POST /api/structure/solution", { output: responseData });
+    res.json(responseData);
   } catch (error) {
     handleError(res, error, "STRUCTURE_SOLUTION_ERROR");
   }
@@ -310,12 +343,12 @@ app.post("/api/structure/solution", async (req, res) => {
  * POST /api/solutions/validate
  * Body: { strProblem, strSolution, clarifyingNotes? }
  * Case 1 (no clarifyingNotes): calls evaluateSolution
- * Case 2 (with clarifyingNotes): calls reEvaluateSolution
+//  * Case 2 (with clarifyingNotes): calls reEvaluateSolution
  * Returns: { evaluation_result }
  */
 app.post("/api/solutions/validate", async (req, res) => {
   try {
-    // console.log("POST /api/solutions/validate - Input:", JSON.stringify(req.body, null, 2));
+    logRequest("POST /api/solutions/validate", { input: req.body });
     const { strProblem, strSolution, clarifyingNotes } = req.body;
 
     if (!strProblem || !strSolution) {
@@ -329,19 +362,19 @@ app.post("/api/solutions/validate", async (req, res) => {
 
     // Case 1: No clarifying notes - initial evaluation
     if (!clarifyingNotes) {
-      console.log("Case 1: Initial evaluation (no clarifying notes)");
+      console.log("Case 1: Initial evaluation (no clarifying notes)", { strProblem, strSolution });
       evaluationResultRaw = await evaluateSolution(strProblem, strSolution);
     }
     // Case 2: With clarifying notes - re-evaluation
     else {
-      console.log("Case 2: Re-evaluation with clarifying notes");
+      // strSolution.clarifying_notes = clarifyingNotes;
+      console.log("Case 2: Re-evaluation with clarifying notes", clarifyingNotes);
+      // evaluationResultRaw = await evaluateSolution(strProblem, strSolution);
       evaluationResultRaw = await reEvaluateSolution(strProblem, strSolution, clarifyingNotes);
     }
-    // console.log("Raw evaluation result:", evaluationResultRaw);
     const evaluationResult = parseDeepSeekResponse(evaluationResultRaw);
-    console.log(evaluationResult);
     
-    res.json({
+    const responseData = {
       success: true,
       evaluation_result: {
         requirement_coverage: evaluationResult.requirement_coverage || [],
@@ -353,7 +386,9 @@ app.post("/api/solutions/validate", async (req, res) => {
         missing_or_weak_points: evaluationResult.missing_or_weak_points || [],
         clarifying_questions: evaluationResult.clarifying_questions || []
     }
-    });
+    };
+    logRequest("POST /api/solutions/validate", { output: responseData });
+    res.json(responseData);
   } catch (error) {
     handleError(res, error, "VALIDATION_ERROR");
   }
@@ -367,7 +402,7 @@ app.post("/api/solutions/validate", async (req, res) => {
  */
 app.post("/api/generate/notes", async (req, res) => {
   try {
-    // console.log("POST /api/generate/notes - Input:", JSON.stringify(req.body, null, 2));
+    logRequest("POST /api/generate/notes", { input: req.body });
     const { questionsArray, answersArray } = req.body;
 
     if (!questionsArray || !answersArray) {
@@ -395,10 +430,12 @@ app.post("/api/generate/notes", async (req, res) => {
     const notesRaw = await generateNotes(questionsArray, answersArray);
     const notes = parseDeepSeekResponse(notesRaw);
 
-    res.json({
+    const responseData = {
       success: true,
       clarifying_notes: notes.clarifying_notes || []
-    });
+    };
+    logRequest("POST /api/generate/notes", { output: responseData });
+    res.json(responseData);
   } catch (error) {
     handleError(res, error, "GENERATE_NOTES_ERROR");
   }
@@ -412,7 +449,7 @@ app.post("/api/generate/notes", async (req, res) => {
  */
 app.post("/api/solutions/save", async (req, res) => {
   try {
-    // console.log("POST /api/solutions/save - Input:", JSON.stringify(req.body, null, 2));
+    logRequest("POST /api/solutions/save", { input: req.body });
     const { session_id, problem_id, strProblem, strSolution, clarifyingNotes } = req.body;
 
     if (!session_id || !problem_id || !strProblem || !strSolution) {
@@ -423,11 +460,9 @@ app.post("/api/solutions/save", async (req, res) => {
     }
 
     // Step 1: Call updateSolution to enhance the solution with clarifying notes
-    console.log("Step 1: Enhancing solution with clarifying notes...");
-    const enhancedSolutionRaw = clarifyingNotes 
-      ? await updateSolution(strProblem, strSolution, clarifyingNotes)
-      : strProblem;
-    const enhancedSolution = parseDeepSeekResponse(enhancedSolutionRaw);
+    console.log("Step 1: Finding root cause, 1-step check & exact solution steps...");
+    const rootCauseRaw = await findRootCause(strProblem, strSolution, clarifyingNotes);
+    const rootCauseAnalysis = parseDeepSeekResponse(rootCauseRaw);
     
     // Step 2: Create a solution entry in the database with the given schema
     console.log("Step 2: Saving solution to database...");
@@ -436,28 +471,20 @@ app.post("/api/solutions/save", async (req, res) => {
       solution_id: solution_id,
       problem_id: problem_id,
       session_id: session_id,
-      solution_steps: enhancedSolution.solution_steps||strSolution.solution_steps,
-      claimed_outcomes: enhancedSolution.claimed_outcomes || strSolution.claimed_outcomes,
+      solution_steps: rootCauseRaw.solution_steps||strSolution.solution_steps,
+      claimed_outcomes: strSolution.claimed_outcomes,
     });
 
     if (!solutionResult.success) {
       return handleError(res, new Error(solutionResult.error), "DB_INSERT_ERROR");
     }
 
-    // Step 3: Call findRootCause to find the root cause with strProblem and enhanced solution
-    console.log("Step 3: Finding root cause...");
-    const rootCauseAnalysisRaw = await findRootCause(strProblem, enhancedSolution);
-    const rootCauseAnalysis = parseDeepSeekResponse(rootCauseAnalysisRaw);
-
-    // Step 4: Save solution_id and root_cause to problem
+    // Step 3: Save solution_id and root_cause to problem
     console.log("Step 4: Updating problem with solution_id and root_cause...");
     console.log("Root cause analysis result:", rootCauseAnalysis);
-    const rootCauseResult = await updateProblemWithRootCause(
+    const rootCauseResult = await updateRootCauseAndSolution(
       problem_id,
-      {
-        cause: rootCauseAnalysis.cause || "",
-        root_cause_summary: rootCauseAnalysis.root_cause_summary || rootCauseAnalysis,
-      },
+      rootCauseAnalysis,
       solution_id
     );
 
@@ -465,7 +492,7 @@ app.post("/api/solutions/save", async (req, res) => {
       return handleError(res, new Error(rootCauseResult.error), "DB_UPDATE_ERROR");
     }
 
-    // Step 5: Update session status to "solution_saved"
+    // Step 4: Update session status to "solution_saved"
     console.log("Step 5: Updating session status...");
     const sessionUpdateResult = await updateChatSessionStatus(session_id, solution_id);
 
@@ -474,15 +501,16 @@ app.post("/api/solutions/save", async (req, res) => {
     }
 
     // Return solution_id, root_cause & solution_summary
-    res.json({
+    const responseData = {
       success: true,
       solution_id: solution_id,
       saved_at: new Date().toISOString(),
-      root_cause: {
-        cause: rootCauseAnalysis.cause || "",
-        root_cause_summary: rootCauseAnalysis.root_cause_summary || "",
-      }
-    });
+      root_cause: rootCauseAnalysis.understood_root_cause || "",
+      root_cause_check: rootCauseAnalysis.one_step_check || "",
+      solution_steps: rootCauseAnalysis.solution_steps || strSolution.solution_steps,
+    };
+    logRequest("POST /api/solutions/save", { output: responseData });
+    res.json(responseData);
   } catch (error) {
     handleError(res, error, "SAVE_SOLUTION_ERROR");
   }
@@ -495,7 +523,7 @@ app.post("/api/solutions/save", async (req, res) => {
  */
 app.post("/api/session/save", async (req, res) => {
   try {
-    // console.log("POST /api/session/save - Input:", JSON.stringify(req.body, null, 2));
+    logRequest("POST /api/session/save", { input: req.body });
     const { 
       session_id, 
       problem_id,
@@ -544,13 +572,13 @@ app.post("/api/session/save", async (req, res) => {
       updateData
     );
 
-    console.log("Step: Session saved with all fields successfully");
-
-    res.json({
+    const responseData = {
       success: true,
       session_id: session_id,
       saved_at: new Date().toISOString()
-    });
+    };
+    logRequest("POST /api/session/save", { output: responseData });
+    res.json(responseData);
   } catch (error) {
     handleError(res, error, "SAVE_SESSION_ERROR");
   }

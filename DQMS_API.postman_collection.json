@@ -249,7 +249,7 @@
                 "validate"
               ]
             },
-            "description": "Validates a solution against the problem. Uses evaluateSolution (no clarifyingNotes) or reEvaluateSolution (with clarifyingNotes). Returns evaluation_result."
+            "description": "Validates a solution against the problem using evaluateSolution. Returns evaluation_result."
           },
           "response": []
         },

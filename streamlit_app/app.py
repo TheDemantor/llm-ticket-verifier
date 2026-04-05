@@ -163,6 +163,16 @@ def call_backend(endpoint, method="GET", payload=None):
     except Exception as e:
         return {"error": str(e), "code": "UNKNOWN_ERROR"}
 
+def map_questions_to_answers(questions_array, answers_array):
+    """Maps questions to their corresponding answers.
+    Input: questions_array (list of questions), answers_array (list of answers).
+    Output: dict with questions as keys and answers as values."""
+    clarifying_notes = {}
+    for i, question in enumerate(questions_array):
+        if i < len(answers_array):
+            clarifying_notes[question] = answers_array[i]
+    return clarifying_notes
+
 def save_solution_and_session(clarifying_notes):
     """Saves solution and session to backend when status is sufficient_solution or unsatisfactory_solution.
     Input: clarifying_notes (list or []) from the improvement loop.
@@ -193,6 +203,31 @@ def save_solution_and_session(clarifying_notes):
     else:
         # Extract solution_id from response
         solution_id = save_solution_result.get("solution_id")
+        saved_at = save_solution_result.get("saved_at", "N/A")
+        root_cause = save_solution_result.get("root_cause", "Not found")
+        root_cause_check = save_solution_result.get("root_cause_check", "Not found")
+        solution_steps = save_solution_result.get("solution_steps", [])
+        
+        # Format solution steps as numbered list
+        steps_text = "\n".join([f"{i+1}. {step}" for i, step in enumerate(solution_steps)]) if solution_steps else "No steps recorded"
+        
+        success_msg = f"""✅ **Solution Saved Successfully!**
+
+**Saved At:** {saved_at}
+
+**Root Cause:** {root_cause}
+
+**Root Cause Check:** {root_cause_check}
+
+**Solution Steps:**
+{steps_text}
+
+Thank you for contributing to our knowledge base!"""
+        
+        with st.chat_message("assistant"):
+            st.markdown(success_msg)
+        st.session_state.messages.append({"role": "assistant", "content": success_msg})
+        st.success("Your solution has been saved! You can reset the session to start a new analysis.")
         
         with st.chat_message("assistant"):
             with st.spinner("Saving session data..."):
@@ -223,11 +258,11 @@ def save_solution_and_session(clarifying_notes):
             st.session_state.status = "solution_saved"
             st.session_state.chat_input_enabled = False
             
-            success_msg = f"✅ **Solution Saved Successfully!**\n\nSolution ID: {solution_id}\n\nThank you for contributing to our knowledge base!"
-            with st.chat_message("assistant"):
-                st.markdown(success_msg)
-            st.session_state.messages.append({"role": "assistant", "content": success_msg})
-            st.success("Your solution has been saved! You can reset the session to start a new analysis.")
+            # success_msg = f"✅ **Solution Saved Successfully!**\n\nTicket Summary: {save_session_result}\n\nThank you for contributing to our knowledge base!"
+            # with st.chat_message("assistant"):
+            #     st.markdown(success_msg)
+            # st.session_state.messages.append({"role": "assistant", "content": success_msg})
+            # st.success("Your solution has been saved! You can reset the session to start a new analysis.")
             st.rerun()
 
 # Sidebar: User info input & session management
@@ -276,7 +311,11 @@ with st.sidebar:
                 
                 st.session_state.status = "active"
                 st.session_state.strProblem = structuredProblem  # Store structured problem
-                ai_message = f"How did you solve this problem?\n\n{problem_description.strip()}"
+                
+                # Format explicit requirements as a numbered list
+                requirements = structuredProblem.get('explicit_requirements', [])
+                requirements_text = "\n".join([f"{i+1}. {req}" for i, req in enumerate(requirements)]) if requirements else "No specific requirements identified"
+                ai_message = f"You need to address the following subproblems:\n\n{requirements_text}"
                 st.session_state.messages.append({"role": "assistant", "content": ai_message})
                 st.success("Analysis started! Check the chat area.")
                 st.rerun()
@@ -413,26 +452,27 @@ if prompt := st.chat_input(chat_placeholder, disabled=not st.session_state.chat_
             max_cycles = 3
             
             # Step 3: Generate clarifying notes
-            with st.chat_message("assistant"):
-                with st.spinner(f"Processing clarifications (Cycle {cycle_count}/{max_cycles})..."):
-                    notes_result = call_backend(
-                        "/api/generate/notes",
-                        method="POST",
-                        payload={
-                            "questionsArray": st.session_state.follow_up_questions,
-                            "answersArray": st.session_state.follow_up_answers
-                        }
-                    )
+            # with st.chat_message("assistant"):
+            #     with st.spinner(f"Processing clarifications (Cycle {cycle_count}/{max_cycles})..."):
+            #         notes_result = call_backend(
+            #             "/api/generate/notes",
+            #             method="POST",
+            #             payload={
+            #                 "questionsArray": st.session_state.follow_up_questions,
+            #                 "answersArray": st.session_state.follow_up_answers
+            #             }
+            #         )
             
-            if "error" in notes_result:
-                error_msg = f"❌ Error generating notes: {notes_result.get('error', 'Unknown error')}"
-                with st.chat_message("assistant"):
-                    st.markdown(error_msg)
-                st.session_state.messages.append({"role": "assistant", "content": error_msg})
-                st.session_state.status = "active"  # Reset to allow retry
-                st.rerun()
+            # if "error" in notes_result:
+            #     error_msg = f"❌ Error generating notes: {notes_result.get('error', 'Unknown error')}"
+            #     with st.chat_message("assistant"):
+            #         st.markdown(error_msg)
+            #     st.session_state.messages.append({"role": "assistant", "content": error_msg})
+            #     st.session_state.status = "active"  # Reset to allow retry
+            #     st.rerun()
             
-            clarifying_notes = notes_result.get("clarifying_notes", [])
+            # clarifying_notes = notes_result.get("clarifying_notes", [])
+            clarifying_notes = map_questions_to_answers(st.session_state.follow_up_questions, st.session_state.follow_up_answers)
             
             # Step 4: Re-evaluate solution with clarifying notes
             with st.chat_message("assistant"):

@@ -25,14 +25,15 @@ export const problemSchema = new Schema(
     title: { type: String },
     category: { type: String },
     explicit_requirements: [{ type: String }],
-    root_cause: {
+    root_cause: [{
       cause: { type: String },
-      root_cause_summary: { type: String }
-    }, 
-    solutions: [{ 
-      solutions_id: { type: String },
-      times_used: { type: Number, default: 1 }
-    }],
+      one_step_check: { type: String },
+      solutions: [{ 
+        solutions_id: { type: String },
+        times_used: { type: Number, default: 1 },
+        last_used: { type: Date, default: Date.now }
+      }]
+    }], 
     created_at: { type: Date, default: Date.now, required: true },
   },
   { collection: "problems_collection" }

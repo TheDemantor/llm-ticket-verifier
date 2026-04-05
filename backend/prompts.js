@@ -54,7 +54,7 @@ const structurizeSolution = (solutionDesc) => {
 
 const evaluateSolution = (strProblem, strSolution) => {
     return `You are an expert in application development & support. You are judging IT support ticket solutions.
-    You will compare a structured PROBLEM and a structured SOLUTION.
+    You have to compare a structured SOLUTION & a structured PROBLEM.
 
     PROBLEM (JSON):
     ---
@@ -70,14 +70,12 @@ const evaluateSolution = (strProblem, strSolution) => {
     1. For each explicit requirement, state the following:
     - whether it is fully covered, partially covered, or not covered by the solution
     - Which solution steps (if any) relate to it.
-    2. Identify any constraints that are not respected or not addressed.
-    3. Identify any acceptance criteria that are not clearly satisfied by the solution.
+    2. Identify any acceptance criteria or constraints that are not clearly satisfied by the solution.
     4. Reason step-by-step and then give:
     - a 0–100 coverage score (how well the solution satisfies the problem)
-    - a brief verdict: “sufficient”, “partially sufficient”, or “insufficient”.
-    - a concise list: “Missing or weak points the solution should add or clarify” based on violated constraints or unfulfilled acceptance criteria.
-    6. Based on "missing or weak points the solution should add or clarify," prepare n number of questions for the user to clarify these points. 
-    7. Give a reasonable opinion that if this solution can possibly solve the problem (true/false) 
+    - a brief verdict: "sufficient," “partially sufficient," or "insufficient."
+    - list of questions: Reasonable questions addressing each violated constraint or unfulfilled acceptance criterion.
+    5. Give a reasonable opinion that if this solution can possibly solve the problem (true/false) 
 
     Output ONLY valid JSON — no explanations, no markdown, no text.
     Return JSON only with these keys:
@@ -93,42 +91,32 @@ const evaluateSolution = (strProblem, strSolution) => {
         "unsatisfied_acceptance_criteria": ["...", "..."],
         "coverage_score": 0,
         "verdict": "sufficient|partially sufficient|insufficient",
-        "missing_or_weak_points": ["...", "..."],
         "clarifying_questions": ["...", "..."],
-        "possible_solution": true/false (give reasoning)
+        "possible_solution": true/false 
     }
 `;
 }
 
 
 const generateNotes = (questionsArray, answersArray) => {
-    return `You are a senior analyst.
+    return `You are an expert in application development & support, handling IT support.
 
-    You will receive clarifying questions and the user's answers. 
-    Your task is to synthesize them into clear, concise notes that can be used to improve the solution.
+    You will receive clarifying questions and the answers from user's response. 
+    Your task is to summarize the answers into clear, concise notes that can be used to complete the solution details.
     
     Input JSON:
     {
     "clarifying_questions": ${JSON.stringify(questionsArray)},
     "answers": ${JSON.stringify(answersArray)}
     } 
-    INPUT (JSON) :
-    ---
-    ${JSON.stringify({
-        "clarifying_questions": questionsArray,
-        "answers": answersArray
-    }, null, 2)}
-    ---
 
     Output ONLY valid JSON — no explanations, no markdown, no text.
 
     Steps:
     1. For each question–answer pair(based on index matching):
     - Interpret what new requirement, constraint, detail, or behavior is being clarified.
-    - Rewrite it as a single, unambiguous note that can be applied directly to the solution.
-    2. Keep the notes:
-    - Concrete and implementation-ready.
-    - Free of meta-talk about questions or the conversation.
+    - Rewrite it as a single, unambiguous note that can be added directly to the solution.
+
 
     Return JSON only with these keys:
     {
@@ -138,9 +126,9 @@ const generateNotes = (questionsArray, answersArray) => {
 }
 
 
-const reEvaluateSolution = (strProblem, strSolution) => {
-    return `You are an expert reviewer. 
-    You will compare a structured PROBLEM and a structured SOLUTION.
+const reEvaluateSolution = (strProblem, strSolution, clarifyingNotes) => {
+    return `You are an expert in application development & support. You are judging IT support ticket solutions.
+    You have to compare a structured SOLUTION & a structured PROBLEM.
 
     PROBLEM (JSON):
     ---
@@ -151,99 +139,95 @@ const reEvaluateSolution = (strProblem, strSolution) => {
     ---
     ${JSON.stringify(strSolution, null, 2)}
     ---
-    
+
+    CLARIFYING_NOTES (JSON):
+    ---
+    ${typeof clarifyingNotes === 'string' ? clarifyingNotes : JSON.stringify(clarifyingNotes, null, 2)}
+    ---
+
     Follow these steps:
-    1. For each explicit and implicit requirement, state:
+    1. For each explicit requirement, state the following:
     - whether it is fully covered, partially covered, or not covered by the solution
-    - which solution_steps (if any) relate to it.
-    2. Identify any constraints that are not respected or not addressed.
-    3. Identify any acceptance_criteria that are not clearly satisfied by the solution.
-    4. Identify any extra features in the solution that are not requested by the problem.
-    5. Reason step-by-step and then give:
+    - Which solution steps (if any) relate to it.
+    2. Identify any acceptance criteria or constraints that are not clearly satisfied by the solution.
+    4. Reason step-by-step and then give:
     - a 0–100 coverage score (how well the solution satisfies the problem)
-    - a brief verdict: “sufficient”, “partially sufficient”, or “insufficient”.
-    - a concise list: “Missing or weak points the solution should add or clarify”.
-    6. find the answers to these “Missing or weak points the solution should add or clarify” in the "clarifying_notes" if they are provided
-    7. based on remaining "Missing or weak points the solution should add or clarify", prepare n number of questions for the user to ask for clarifying these points. 
+    - a brief verdict: "sufficient," “partially sufficient," or "insufficient."
+    - list of questions: Reasonable questions addressing each violated constraint or unfulfilled acceptance criterion.
+    5. Give a reasonable opinion that if this solution can possibly solve the problem (true/false) 
+    6. Re-evaluate the solution in light of the clarifying notes. Adjust the coverage score, verdict, and questions as needed based on the new information.
 
     Output ONLY valid JSON — no explanations, no markdown, no text.
     Return JSON only with these keys:
     {
-    "requirement_coverage": [
-        {
-        "requirement": "...",
-        "type": "explicit|implicit",
-        "coverage": "full|partial|none",
-        "related_solution_steps": ["...", "..."],
-        "notes": "..."
-        }
-    ],
-    "unaddressed_constraints": ["...", "..."],
-    "unsatisfied_acceptance_criteria": ["...", "..."],
-    "extra_solution_features": ["...", "..."],
-    "coverage_score": 0,
-    "verdict": "sufficient|partially sufficient|insufficient",
-    "missing_or_weak_points": ["...", "..."],
-    "clarifying_questions": ["...", "..."]
+        "requirement_coverage": [
+            {
+            "requirement": "...",
+            "coverage": "full|partial|none",
+            "related_solution_steps": ["...", "..."],
+            }
+        ],
+        "unaddressed_constraints": ["...", "..."],
+        "unsatisfied_acceptance_criteria": ["...", "..."],
+        "coverage_score": 0,
+        "verdict": "sufficient|partially sufficient|insufficient",
+        "clarifying_questions": ["...", "..."],
+        "possible_solution": true/false 
     }
     `;
 }
 
 
-const updateSolution = (strProblem, strSolution, clarifyingNotes) => {
-    return `You are an experienced Senior Analyst.
-    You will be given three structured JSON inputs:
-
-    PROBLEM: ${JSON.stringify(strProblem, null, 2)}
-
-    SOLUTION: ${JSON.stringify(strSolution, null, 2)}
-
-    CLARIFYING_NOTES: ${typeof clarifyingNotes === 'string' ? clarifyingNotes : JSON.stringify(clarifyingNotes, null, 2)}
-
-    Your task:
-
-    Examine each clarifying note to determine whether it impacts any part of the solution_steps or claimed_outcomes in the SOLUTION.
-
-    If a note requires changes, update the SOLUTION accordingly. Adjust only what is necessary.
+const findRootCause = (strProblem, strSolution, clarifyingNotes) => {
+    return `You are an expert in application development & support. You are analyzing IT support ticket solutions.
     
-    Output ONLY valid JSON — no explanations, no markdown, no text.
-    Return JSON only with these keys:
-    {
-    "solution_summary": "...",
-    "solution_steps": ["...", "..."],
-    "assumptions": ["...", "..."],
-    "claimed_outcomes": ["...", "..."]
-    }
+    You are given three JSON objects: 
+
+    strProblem: ${JSON.stringify(strProblem, null, 2)},
+
+    strSolution: ${JSON.stringify(strSolution, null, 2)}, 
+
+    and clarifyingNotes: ${JSON.stringify(clarifyingNotes, null, 2)}.
+
+    Based only on the information in these objects, produce a JSON output with the following three keys:
+
+"understood_root_cause": A concise, one‑sentence explanation of why the issue occurred (as implied by the solution and clarifying notes).
+
+"one_step_check": A single, actionable check (e.g., a command, URL test, file system verification, or log query) that would confirm the same root cause in the future.
+
+"solution_steps": A numbered list of the precise actions taken to resolve the issue, copied or adapted from solution_steps and clarifyingNotes.
+
+Do not add extra commentary, markdown, or explanations. Output only valid JSON.
 `;
 }
 
 
-const findRootCause = (strProblem, strSolution) => {
-    return `You are a Senior IT Support Analyst. Output ONLY valid JSON - no text, no explanations.
+// const findRootCause = (strProblem, strSolution) => {
+//     return `You are a Senior IT Support Analyst. Output ONLY valid JSON - no text, no explanations.
 
-    INPUT:
-    PROBLEM: ${JSON.stringify(strProblem, null, 2)}
-    SOLUTION: ${JSON.stringify(strSolution, null, 2)}
+//     INPUT:
+//     PROBLEM: ${JSON.stringify(strProblem, null, 2)}
+//     SOLUTION: ${JSON.stringify(strSolution, null, 2)}
 
-    TASK: Identify the ROOT CAUSE by tracing from SOLUTION back to PROBLEM.
+//     TASK: Identify the ROOT CAUSE by tracing from SOLUTION back to PROBLEM.
 
-    STEPS:
-    1. Symptoms = what's broken (from PROBLEM)
-    2. Fix = what SOLUTION changes 
-    3. Root Cause = fundamental reason symptoms occurred
-    4. Distinguish: Symptom ≠ Root Cause ≠ Contributing Factors
-    5. Return two fields:
-       - "cause": 1-sentence diagnostic check for this root cause
-       - "root_cause_summary": brief root cause explanation (2-3 sentences)
+//     STEPS:
+//     1. Symptoms = what's broken (from PROBLEM)
+//     2. Fix = what SOLUTION changes 
+//     3. Root Cause = fundamental reason symptoms occurred
+//     4. Distinguish: Symptom ≠ Root Cause ≠ Contributing Factors
+//     5. Return two fields:
+//        - "cause": 1-sentence diagnostic check for this root cause
+//        - "root_cause_summary": brief root cause explanation (2-3 sentences)
 
-    Output ONLY valid JSON — no explanations, no markdown, no text.
-    Return JSON only with these keys:
-    {
-    "cause": "...",
-    "root_cause_summary": "..."
-    }
-`;
-}
+//     Output ONLY valid JSON — no explanations, no markdown, no text.
+//     Return JSON only with these keys:
+//     {
+//     "cause": "...",
+//     "root_cause_summary": "..."
+//     }
+// `;
+// }
 
 
 const summarizeSolution = (strSolution) => {
@@ -267,7 +251,7 @@ export default {
     evaluateSolution,
     generateNotes,
     reEvaluateSolution,
-    updateSolution,
+    // updateSolution,
     findRootCause,
     summarizeSolution
 }

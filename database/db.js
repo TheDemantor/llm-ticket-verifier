@@ -375,13 +375,19 @@ export async function addChatMessage(messageData) {
 
 /**
  * Updates a problem with root cause analysis and adds a solution reference
- * Saves root cause information and links the solution to the problem
+ * Appends root cause information and links the solution to the problem
+ * Preserves existing root cause history for multi-solution problems
+ * Schema Structure:
+ * - root_cause: Array of objects, each containing:
+ *   - cause: Root cause description
+ *   - one_step_check: Quick verification step
+ *   - solutions: Array of {solutions_id, times_used, last_used}
  * @param {string} problem_id - Problem ID to update
- * @param {Object} rootCauseData - Root cause data with cause and root_cause_summary
+ * @param {Object} rootCauseData - Root cause data with cause and root_cause_summary (one_step_check)
  * @param {string} solution_id - Solution ID to add to solutions array
  * @returns {Promise<{success: boolean, error?: string}>}
  */
-export async function updateProblemWithRootCause(problem_id, rootCauseData, solution_id) {
+export async function updateRootCauseAndSolution(problem_id, rootCauseData, solution_id) {
   try {
     // Ensure database connection
     await getDB();
@@ -392,19 +398,25 @@ export async function updateProblemWithRootCause(problem_id, rootCauseData, solu
       return { success: false, error: "Problem not found" };
     }
 
-    // Update problem with root cause and push new solution to solutions array
+    // Create new root cause entry with solution reference
+    const newRootCause = {
+      cause: rootCauseData.cause || "",
+      one_step_check: rootCauseData.root_cause_summary || "",
+      solutions: [
+        {
+          solutions_id: solution_id,
+          times_used: 1,
+          last_used: new Date()
+        }
+      ]
+    };
+
+    // Push new root cause to existing root_cause array (preserves past data)
     const result = await Problem.updateOne(
       { _id: problem._id },
       {
-        root_cause: {
-          cause: rootCauseData.cause,
-          root_cause_summary: rootCauseData.root_cause_summary
-        },
         $push: {
-          solutions: {
-            solutions_id: solution_id,
-            times_used: 1
-          }
+          root_cause: newRootCause // Append new root cause to array
         }
       }
     );

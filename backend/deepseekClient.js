@@ -180,7 +180,7 @@ export async function generateNotes(questionsArray, answersArray){
 export async function reEvaluateSolution(strProblem, strSolution, clarifyingNotes){
   try {
     strSolution.clarifying_notes = clarifyingNotes;
-    const prompt = prompts.reEvaluateSolution(strProblem, strSolution);
+    const prompt = prompts.reEvaluateSolution(strProblem, strSolution, clarifyingNotes);
 
     const response = await openai.chat.completions.create({
       messages: [{ role: "user", content: prompt }],
@@ -193,28 +193,28 @@ export async function reEvaluateSolution(strProblem, strSolution, clarifyingNote
   }
 }
 
-/**
- * Updates solution with clarifying notes incorporated
- * Enhances the solution structure with additional context
- * @param {string} strProblem - Structured problem description
- * @param {string} strSolution - Structured solution description
- * @param {string} clarifyingNotes - Clarifying notes to incorporate
- * @returns {Promise<string>} Enhanced solution with integrated notes
- */
-export async function updateSolution(strSolution, clarifyingNotes){
-  try {
-    const prompt = prompts.updateSolution(strSolution, clarifyingNotes);
+// /**
+//  * Updates solution with clarifying notes incorporated
+//  * Enhances the solution structure with additional context
+//  * @param {string} strProblem - Structured problem description
+//  * @param {string} strSolution - Structured solution description
+//  * @param {string} clarifyingNotes - Clarifying notes to incorporate
+//  * @returns {Promise<string>} Enhanced solution with integrated notes
+//  */
+// export async function updateSolution(strSolution, clarifyingNotes){
+//   try {
+//     const prompt = prompts.updateSolution(strSolution, clarifyingNotes);
 
-    const response = await openai.chat.completions.create({
-      messages: [{ role: "user", content: prompt }],
-      model: MODEL_NAME
-    });
+//     const response = await openai.chat.completions.create({
+//       messages: [{ role: "user", content: prompt }],
+//       model: MODEL_NAME
+//     });
 
-    return response.choices[0].message.content || String(response);
-  } catch (error) {
-    throw new Error(`Failed to update solution: ${error.message}`);
-  }
-}
+//     return response.choices[0].message.content || String(response);
+//   } catch (error) {
+//     throw new Error(`Failed to update solution: ${error.message}`);
+//   }
+// }
 
 /**
  * Identifies and analyzes the root cause from problem and solution
