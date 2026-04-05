@@ -217,6 +217,46 @@ export async function reEvaluateSolution(strProblem, strSolution, clarifyingNote
 // }
 
 /**
+ * Generates a complete solution based on problem analysis
+ * Uses AI expertise to create actionable solution steps with root cause
+ * @param {string} strProblem - Structured problem description
+ * @returns {Promise<Object>} Complete solution with root cause, steps, and outcomes
+ */
+export async function generateSolution(strProblem) {
+  try {
+    const prompt = `You are an expert in application development & support, solutioning IT support.
+    Your task is to analyze the given structured PROBLEM and provide a structured solution to fulfull each explicit_requirement & acceptance_criteria within given constraints, if any.
+
+    PROBLEM:
+
+    ${JSON.stringify(strProblem, null, 2)}
+
+    Based on your expertise, output ONLY valid JSON — no explanations, no markdown, no text.
+    Use the following structure:
+
+    {
+    "root_cause": "Most likely technical cause of the problem",
+    "one_step_check": "1 step check for ruling out if this is the root cause of the problem.",
+    "solution_steps": ["Step 1: ...", "Step 2: ...", ...],
+    "assumptions": ["Assumption about environment/browser/configuration", ...],
+    "claimed_outcomes": ["Expected result after applying solution", ...]
+    }
+
+    Ensure each step is actionable, assumptions are realistic, and the root cause is specific to the problem domain.`;
+
+    const response = await openai.chat.completions.create({
+      messages: [{ role: "user", content: prompt }],
+      model: MODEL_NAME
+    });
+    
+    const responseContent = response.choices[0].message.content || String(response);
+    return responseContent;
+  } catch (error) {
+    throw new Error(`Failed to generate solution: ${error.message}`);
+  }
+}
+
+/**
  * Identifies and analyzes the root cause from problem and solution
  * Extracts underlying cause information from the solution context
  * @param {string} strProblem - Structured problem description

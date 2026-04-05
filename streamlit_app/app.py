@@ -64,6 +64,18 @@ if "clarifying_cycle" not in st.session_state:
 if "current_question_index_clarifying" not in st.session_state:
     st.session_state.current_question_index_clarifying = 0
 
+if "llm_solution" not in st.session_state:
+    st.session_state.llm_solution = None
+
+if "solution_source" not in st.session_state:
+    st.session_state.solution_source = None
+
+if "show_llm_card" not in st.session_state:
+    st.session_state.show_llm_card = False
+
+if "expecting_llm_solution_choice" not in st.session_state:
+    st.session_state.expecting_llm_solution_choice = False
+
 
 # Commented out session state variables (possibly for future use or deprecated)
 # if "current_phase" not in st.session_state:
@@ -109,6 +121,10 @@ def reset_session():
     st.session_state.strSolution = None
     st.session_state.clarifying_cycle = 0
     st.session_state.current_question_index_clarifying = 0
+    st.session_state.llm_solution = None
+    st.session_state.solution_source = None
+    st.session_state.show_llm_card = False
+    st.session_state.expecting_llm_solution_choice = False
 
 def compile_solution_from_conversation():
     """Compiles solution from conversation history. Input: None (uses session_state). Output: dict with solution_details & root_cause_analysis."""
@@ -142,6 +158,82 @@ def show_solution_preview():
         "role": "assistant",
         "content": f"Here's a preview of your solution:\n\n{preview_text}\n\n**Does this look correct?**"
     })
+
+def display_llm_solution_card():
+    """Displays the LLM-generated solution in a card format with Yes/No buttons.
+    Input: None (uses st.session_state.llm_solution).
+    Output: Displays card with solution and handles Yes/No button logic."""
+    if not st.session_state.llm_solution:
+        return
+    
+    solution = st.session_state.llm_solution
+    
+    # Create a card-like display using container
+    with st.container(border=True):
+        st.markdown("### 🤖 AI-Generated Solution")
+        
+        # Display root cause and one_step_check
+        col1, col2 = st.columns(2)
+        with col1:
+            st.markdown("**Root Cause:**")
+            st.markdown(solution.get("root_cause", "N/A"))
+        
+        with col2:
+            st.markdown("**1-Step Check:**")
+            st.markdown(solution.get("one_step_check", "N/A"))
+        
+        st.divider()
+        
+        # Expandable section for full details
+        with st.expander("📋 View Full Solution Details"):
+            st.markdown("**Solution Steps:**")
+            steps = solution.get("solution_steps", [])
+            if steps:
+                for i, step in enumerate(steps, 1):
+                    st.markdown(f"{i}. {step}")
+            else:
+                st.markdown("No steps provided")
+            
+            st.markdown("**Assumptions:**")
+            assumptions = solution.get("assumptions", [])
+            if assumptions:
+                for assumption in assumptions:
+                    st.markdown(f"- {assumption}")
+            else:
+                st.markdown("No assumptions listed")
+            
+            st.markdown("**Claimed Outcomes:**")
+            outcomes = solution.get("claimed_outcomes", [])
+            if outcomes:
+                for outcome in outcomes:
+                    st.markdown(f"- {outcome}")
+            else:
+                st.markdown("No outcomes listed")
+        
+        st.divider()
+        st.markdown("**Does this solution work for you?**")
+        
+        # Yes/No buttons in columns
+        col1, col2, col3 = st.columns([1, 1, 2])
+        with col1:
+            if st.button("✅ Yes", use_container_width=True, key="llm_solution_yes"):
+                st.session_state.solution_source = "llm"
+                st.session_state.show_llm_card = False
+                st.session_state.expecting_llm_solution_choice = False
+                # Use the LLM solution for validation
+                st.session_state.strSolution = solution
+                st.session_state.status = "evaluating_solution"
+                st.session_state.chat_input_enabled = True
+                st.rerun()
+        
+        with col2:
+            if st.button("❌ No", use_container_width=True, key="llm_solution_no"):
+                st.session_state.solution_source = "user"
+                st.session_state.show_llm_card = False
+                st.session_state.expecting_llm_solution_choice = False
+                st.session_state.llm_solution = None
+                st.session_state.status = "active"
+                st.rerun()
 
 def call_backend(endpoint, method="GET", payload=None):
     """Makes HTTP requests to backend API. Input: endpoint (str), method (GET/POST), payload (dict). Output: dict with response or error."""
@@ -312,11 +404,28 @@ with st.sidebar:
                 st.session_state.status = "active"
                 st.session_state.strProblem = structuredProblem  # Store structured problem
                 
-                # Format explicit requirements as a numbered list
-                requirements = structuredProblem.get('explicit_requirements', [])
-                requirements_text = "\n".join([f"{i+1}. {req}" for i, req in enumerate(requirements)]) if requirements else "No specific requirements identified"
-                ai_message = f"You need to address the following subproblems:\n\n{requirements_text}"
-                st.session_state.messages.append({"role": "assistant", "content": ai_message})
+                # ===================================================================
+                # NEW FLOW: Call /api/solution/find to get LLM solution
+                # ===================================================================
+                with st.spinner("Generating AI solution..."):
+                    llm_solution_response = call_backend("/api/solution/find", method="POST", payload={"strProblem": structuredProblem})
+                
+                if "error" in llm_solution_response:
+                    # If LLM solution generation fails, fall back to user solution input
+                    st.toast(f"⚠️ Could not generate AI solution: {llm_solution_response.get('error', 'Unknown error')}", icon="⚠️")
+                    # Show user solution input
+                    requirements = structuredProblem.get('explicit_requirements', [])
+                    requirements_text = "\n".join([f"{i+1}. {req}" for i, req in enumerate(requirements)]) if requirements else "No specific requirements identified"
+                    ai_message = f"You need to address the following subproblems:\n\n{requirements_text}"
+                    st.session_state.messages.append({"role": "assistant", "content": ai_message})
+                    st.session_state.solution_source = "user"
+                else:
+                    # LLM solution generated successfully
+                    generated_solution = llm_solution_response.get("generated_solution", {})
+                    st.session_state.llm_solution = generated_solution
+                    st.session_state.show_llm_card = True
+                    st.session_state.expecting_llm_solution_choice = True
+                
                 st.success("Analysis started! Check the chat area.")
                 st.rerun()
     
@@ -334,16 +443,87 @@ if st.session_state.messages:
     for message in st.session_state.messages:
         with st.chat_message(message["role"]):
             st.markdown(message["content"])
-else:
+elif st.session_state.status is None:
     st.info("👋 Enter your details in the sidebar and click 'Start Analysis' to begin.")
 
-# # Enable chat input on button click
-if st.session_state.status == "active" and not st.session_state.chat_input_enabled:
+# ===================================================================
+# DISPLAY LLM SOLUTION CARD (if enabled)
+# ===================================================================
+if st.session_state.show_llm_card and st.session_state.llm_solution:
+    display_llm_solution_card()
+
+# ===================================================================
+# AUTO-VALIDATE LLM SOLUTION (triggered when user clicks "Yes")
+# ===================================================================
+if st.session_state.status == "evaluating_solution" and st.session_state.solution_source == "llm" and st.session_state.strSolution:
+    with st.chat_message("assistant"):
+        with st.spinner("Validating AI solution..."):
+            validation_result = call_backend("/api/solutions/validate", method="POST", payload={"strProblem": st.session_state.strProblem, "strSolution": st.session_state.strSolution})
+    
+    if "error" in validation_result:
+        error_msg = f"❌ Error validating solution: {validation_result.get('error', 'Unknown error')}"
+        with st.chat_message("assistant"):
+            st.markdown(error_msg)
+        st.warning("Click 'Reset Session' in the sidebar to start over.")
+        st.session_state.messages.append({"role": "assistant", "content": error_msg})
+        st.session_state.status = "active"
+    else:
+        # Process validation result
+        validation_data = validation_result.get("evaluation_result", {})
+        clarifying_questions = validation_data.get("clarifying_questions", [])
+        coverage_score = validation_data.get("coverage_score", 0)
+        
+        # Decision: Sufficient or needs clarification
+        if coverage_score >= 80:
+            # Solution is good enough - proceed to save
+            st.session_state.status = "sufficient_solution"
+            with st.chat_message("assistant"):
+                st.markdown(f"✅ **Excellent!** Your solution has a coverage score of {coverage_score}%. Proceeding to save...")
+            st.session_state.messages.append({"role": "assistant", "content": f"✅ Coverage score: {coverage_score}%"})
+            # Save immediately
+            save_solution_and_session(clarifying_notes=[])
+        else:
+            # Solution needs clarification
+            st.session_state.status = "improving_solution"
+            st.session_state.follow_up_questions.extend(clarifying_questions)
+            st.session_state.clarifying_cycle = 1
+            st.session_state.current_question_index_clarifying = 0
+            st.session_state.expecting_clarification_answer = True
+            
+            # Ask the first clarifying question
+            if len(st.session_state.follow_up_questions) > 0:
+                first_q = st.session_state.follow_up_questions[0]
+                with st.chat_message("assistant"):
+                    st.markdown(f"**Clarification {st.session_state.clarifying_cycle}.1:** {first_q}")
+                st.session_state.messages.append({"role": "assistant", "content": first_q})
+                st.session_state.chat_input_enabled = True
+            st.rerun()
+
+# ===================================================================
+# SHOW "DESCRIBE MY SOLUTION" BUTTON (if user rejected LLM solution)
+# ===================================================================
+if st.session_state.solution_source == "user" and st.session_state.status == "active" and not st.session_state.chat_input_enabled:
+    # Enable chat input on button click
     col1, col2, col3 = st.columns([1, 2, 1])
     with col2:
         if st.button("Describe My Solution", use_container_width=True, type="primary"):
+            # Display subproblems as a message in chat
+            requirements = st.session_state.strProblem.get('explicit_requirements', []) if st.session_state.strProblem else []
+            requirements_text = "\n".join([f"{i+1}. {req}" for i, req in enumerate(requirements)]) if requirements else "No specific requirements identified"
+            subproblems_message = f"📋 **Please address the following subproblems:**\n\n{requirements_text}"
+            
+            st.session_state.messages.append({"role": "assistant", "content": subproblems_message})
             st.session_state.chat_input_enabled = True
             st.rerun()
+
+# # Enable chat input on button click (for backward compatibility, if no solution_source set)
+if st.session_state.status == "active" and not st.session_state.chat_input_enabled and not st.session_state.expecting_llm_solution_choice:
+    if st.session_state.solution_source is None:
+        col1, col2, col3 = st.columns([1, 2, 1])
+        with col2:
+            if st.button("Describe My Solution", use_container_width=True, type="primary"):
+                st.session_state.chat_input_enabled = True
+                st.rerun()
 
 # # Set placeholder text for chat input based on state
 chat_placeholder = "Type your message here..." if st.session_state.chat_input_enabled else "Click 'Describe My Solution' to enable chat input"
@@ -367,51 +547,60 @@ if prompt := st.chat_input(chat_placeholder, disabled=not st.session_state.chat_
                 st.warning("Click 'Reset Session' in the sidebar to try again.")
             st.session_state.messages.append({"role": "assistant", "content": error_msg})
         else:
-            # Validate the user's solution via backend
+            # ===================================================================
+            # SOLUTION HANDLING: Structure and Validate (based on solution source)
+            # ===================================================================
             with st.chat_message("assistant"):
-                # call backend API to structurize the solution "/api/structure/solution"
-                with st.spinner("Structuring your solution..."):
-                    st.session_state.initial_solution = prompt
-                    structured_solution = call_backend("/api/structure/solution", method="POST", payload={"solutionDesc": prompt})
-                if "error" in structured_solution:
-                    error_msg = f"❌ Error structuring solution: {structured_solution.get('error', 'Unknown error')}"
-                    st.warning(error_msg)
-                else:
-                    # save the structurized solution in session state for later use
-                    st.session_state.strSolution = structured_solution.get("structured_solution", "")
-                # call backend API to validate the solution by passing strProblem, strSolution from session state
-                with st.spinner("Validating your solution..."):
-                    st.session_state.status = "evaluating_solution"
-                    validation_result = call_backend("/api/solutions/validate", method="POST", payload={"strProblem": st.session_state.strProblem, "strSolution": st.session_state.strSolution})
-                if "error" in validation_result:
-                    error_msg = f"❌ Error validating solution: {validation_result.get('error', 'Unknown error')}"
-                    st.markdown(error_msg)
-                    st.warning("Click 'Reset Session' in the sidebar to start over.")
-                    st.session_state.messages.append({"role": "assistant", "content": error_msg})
-                else:
-                    # Process validation result
-                    print("Validation Result:", validation_result)
-                    validation_data = validation_result.get("evaluation_result", {})
-                    # st.session_state.validation_result = validation_data
-                    clarifying_questions = validation_data.get("clarifying_questions", [])
-                    verdict = validation_data.get("verdict", "unknown")
-                    coverage_score = validation_data.get("coverage_score", 0)
+                # USER SOLUTION FLOW: Structure the user's input
+                if st.session_state.solution_source == "user":
+                    with st.spinner("Structuring your solution..."):
+                        st.session_state.initial_solution = prompt
+                        structured_solution = call_backend("/api/structure/solution", method="POST", payload={"solutionDesc": prompt})
+                    if "error" in structured_solution:
+                        error_msg = f"❌ Error structuring solution: {structured_solution.get('error', 'Unknown error')}"
+                        st.warning(error_msg)
+                    else:
+                        # save the structurized solution in session state for later use
+                        st.session_state.strSolution = structured_solution.get("structured_solution", "")
+                
+                # LLM SOLUTION FLOW: Solution already structured
+                if st.session_state.solution_source == "llm":
+                    st.markdown("🤖 **Validating AI solution with your feedback...**")
+                
+                # VALIDATE SOLUTION (both flows)
+                if st.session_state.strSolution:
+                    with st.spinner("Validating solution..."):
+                        st.session_state.status = "evaluating_solution"
+                        validation_result = call_backend("/api/solutions/validate", method="POST", payload={"strProblem": st.session_state.strProblem, "strSolution": st.session_state.strSolution})
                     
-                    st.session_state.status = "sufficient_solution" if coverage_score >= 80 else "improving_solution"
-                    
-                    # ===================================================================
-                    # STEP 6A: Ask clarifying questions if coverage < 80%
-                    # ===================================================================
-                    if st.session_state.status == "improving_solution":
-                        # Store clarifying questions for first cycle
-                        st.session_state.follow_up_questions.extend(clarifying_questions)
-                        st.session_state.clarifying_cycle = 1
-                        st.session_state.current_question_index_clarifying = 0
-                        st.session_state.expecting_clarification_answer = True
+                    if "error" in validation_result:
+                        error_msg = f"❌ Error validating solution: {validation_result.get('error', 'Unknown error')}"
+                        st.markdown(error_msg)
+                        st.warning("Click 'Reset Session' in the sidebar to start over.")
+                        st.session_state.messages.append({"role": "assistant", "content": error_msg})
+                    else:
+                        # Process validation result
+                        print("Validation Result:", validation_result)
+                        validation_data = validation_result.get("evaluation_result", {})
+                        clarifying_questions = validation_data.get("clarifying_questions", [])
+                        verdict = validation_data.get("verdict", "unknown")
+                        coverage_score = validation_data.get("coverage_score", 0)
                         
-                        # Ask the first clarifying question
-                        if len(st.session_state.follow_up_questions) > 0:
-                            first_q = st.session_state.follow_up_questions[0]
+                        st.session_state.status = "sufficient_solution" if coverage_score >= 80 else "improving_solution"
+                        
+                        # ===================================================================
+                        # STEP 6A: Ask clarifying questions if coverage < 80%
+                        # ===================================================================
+                        if st.session_state.status == "improving_solution":
+                            # Store clarifying questions for first cycle
+                            st.session_state.follow_up_questions.extend(clarifying_questions)
+                            st.session_state.clarifying_cycle = 1
+                            st.session_state.current_question_index_clarifying = 0
+                            st.session_state.expecting_clarification_answer = True
+                            
+                            # Ask the first clarifying question
+                            if len(st.session_state.follow_up_questions) > 0:
+                                first_q = st.session_state.follow_up_questions[0]
                             with st.chat_message("assistant"):
                                 st.markdown(f"**Clarification {st.session_state.clarifying_cycle}.1:** {first_q}")
                             st.session_state.messages.append({"role": "assistant", "content": first_q})
