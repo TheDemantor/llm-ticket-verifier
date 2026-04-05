@@ -33,6 +33,7 @@ import {
   evaluateSolution,
   generateNotes,
   reEvaluateSolution,
+  generateSolution,
   // updateSolution,
   findRootCause
 } from "./deepseekClient.js";
@@ -290,7 +291,9 @@ app.post("/api/structure/problem", async (req, res) => {
         explicit_requirements: structuredProblem.explicit_requirements,
         implicit_requirements: structuredProblem.implicit_requirements,
         constraints: structuredProblem.constraints,
-        acceptance_criteria: structuredProblem.acceptance_criteria
+        acceptance_criteria: structuredProblem.acceptance_criteria,
+        category: structuredProblem.category,
+        sub_category: structuredProblem.sub_category
       }
     };
     logRequest("POST /api/structure/problem", { output: responseData });
@@ -338,6 +341,52 @@ app.post("/api/structure/solution", async (req, res) => {
   }
 });
 
+
+/**
+ * POST /api/solution/find
+ * Body: { strProblem }
+ * Generates a complete solution based on problem analysis
+ * Returns: { generated_solution }
+ */
+app.post("/api/solution/find", async (req, res) => {
+  try {
+    logRequest("POST /api/solution/find", { input: req.body });
+    const { strProblem } = req.body;
+
+    if (!strProblem) {
+      return res.status(400).json({
+        error: "strProblem is required",
+        code: "MISSING_FIELDS"
+      });
+    }
+
+    // Call generateSolution to create solution based on problem
+    console.log("Step 1: Generating solution from problem analysis...");
+    const solutionRaw = await generateSolution(strProblem);
+    console.log("\n========== RAW LLM RESPONSE ==========");
+    console.log(solutionRaw);
+    console.log("=======================================\n");
+
+    // Parse the response
+    const parsedSolution = parseDeepSeekResponse(solutionRaw);
+    console.log("Step 2: Solution parsed successfully");
+
+    const responseData = {
+      success: true,
+      generated_solution: {
+        root_cause: parsedSolution.root_cause || "",
+        one_step_check: parsedSolution.one_step_check || "",
+        solution_steps: parsedSolution.solution_steps || [],
+        assumptions: parsedSolution.assumptions || [],
+        claimed_outcomes: parsedSolution.claimed_outcomes || []
+      }
+    };
+    logRequest("POST /api/solution/find", { output: responseData });
+    res.json(responseData);
+  } catch (error) {
+    handleError(res, error, "GENERATE_SOLUTION_ERROR");
+  }
+});
 
 /**
  * POST /api/solutions/validate
